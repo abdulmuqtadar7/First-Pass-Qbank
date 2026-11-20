@@ -1,9 +1,9 @@
 import { ArrowLeft } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { validateQuestions } from '../lib/data'
+import { BUNDLED_FILES, validateQuestions } from '../lib/data'
 import { navigate } from '../lib/nav'
 import { useStore } from '../lib/store'
-import { btnGhost, btnPrimary, card, label, page } from '../lib/ui'
+import { btnGhost, btnPrimary, card, label, page, tag } from '../lib/ui'
 
 export default function Admin() {
   const { questions, importQuestions, importedCount, clearImported } = useStore()
@@ -15,9 +15,9 @@ export default function Admin() {
     const lines: string[] = []
     for (const f of Array.from(files)) {
       try {
-        const { valid, errors } = validateQuestions(JSON.parse(await f.text()))
+        const { valid, errors, rejected } = validateQuestions(JSON.parse(await f.text()))
         const { added, duplicates } = importQuestions(valid)
-        lines.push(`${f.name}: ${added} added, ${duplicates} duplicates, ${errors.length ? `${errors.length}+ rejected` : '0 rejected'}`)
+        lines.push(`${f.name}: ${added} added, ${duplicates} duplicates, ${rejected} rejected`)
         errors.forEach((e) => lines.push(`   • ${e}`))
       } catch (e) {
         lines.push(`${f.name}: invalid JSON (${(e as Error).message})`)
@@ -38,12 +38,32 @@ export default function Admin() {
         </button>
         <header>
           <p className={label}>Admin</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Import questions</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Question bank</h1>
         </header>
 
+        <section className={`${card} overflow-hidden`}>
+          <p className={`${label} px-5 pt-4`}>Bundled files · src/data/*.json</p>
+          <ul className="divide-y divide-line px-5 pb-2 pt-1">
+            {BUNDLED_FILES.map((f) => (
+              <li key={f.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <span className="truncate font-mono text-xs">{f.name}</span>
+                <span className="flex items-center gap-2">
+                  <span className={tag}>{f.count} Qs</span>
+                  {f.rejected > 0 && <span className={tag}>{f.rejected} rejected</span>}
+                </span>
+              </li>
+            ))}
+            {BUNDLED_FILES.length === 0 && <li className="py-3 text-sm text-muted">No JSON files found in src/data.</li>}
+          </ul>
+          <p className="border-t border-line px-5 py-3 text-xs text-muted">
+            Any .json file dropped into src/data is bundled automatically at build time and merged without duplicates.
+          </p>
+        </section>
+
         <section className={`${card} space-y-3 p-5`}>
+          <p className={label}>Import in browser</p>
           <p className="text-sm text-muted">
-            Upload one or more <code className="font-mono text-xs">.json</code> files containing an array of questions. Files are validated,
+            Upload one or more <code className="font-mono text-xs">.json</code> files (4 or 5 options per question). Files are validated,
             de-duplicated and stored in this browser.
           </p>
           <input ref={input} type="file" accept=".json,application/json" multiple hidden onChange={(e) => onFiles(e.target.files)} />

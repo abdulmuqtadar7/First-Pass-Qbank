@@ -1,5 +1,5 @@
-export type OptionKey = 'A' | 'B' | 'C' | 'D'
-export const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D']
+export type OptionKey = 'A' | 'B' | 'C' | 'D' | 'E'
+export const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D', 'E']
 
 export interface DistractorExplanation {
   reason: string
@@ -17,10 +17,13 @@ export interface RawQuestion {
   option_B: string
   option_C: string
   option_D: string
+  option_E?: string
   correct_option: OptionKey
   correct_explanation: string
   correct_fa_page: number
-  distractor_explanations: Record<OptionKey, DistractorExplanation>
+  distractor_explanations: Record<'A' | 'B' | 'C' | 'D', DistractorExplanation> & {
+    E?: DistractorExplanation
+  }
   high_yield_pearl: string
 }
 

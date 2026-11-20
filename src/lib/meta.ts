@@ -11,6 +11,7 @@ import {
   Microscope,
   Pill,
   ShieldCheck,
+  Smile,
   Stethoscope,
   Wind,
   type LucideIcon,
@@ -19,6 +20,7 @@ import {
 const ICONS: Record<string, LucideIcon> = {
   cardiovascular: Heart,
   neurology: Brain,
+  psychiatry: Smile,
   renal: Droplets,
   pharmacology: Pill,
   microbiology: Bug,

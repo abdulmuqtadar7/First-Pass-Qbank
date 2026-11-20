@@ -1,8 +1,9 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, EyeOff, Flag, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { distractorOf, optionKeysOf, optionText } from '../lib/options'
 import { useStore } from '../lib/store'
 import { btnGhost, btnPrimary, card, iconBtn, label, tag } from '../lib/ui'
-import { OPTION_KEYS, type Answer, type Confidence, type OptionKey, type Session } from '../types/qbank'
+import type { Answer, Confidence, OptionKey, Session } from '../types/qbank'
 import BlockReport from './BlockReport'
 
 interface Props {
@@ -21,7 +22,7 @@ interface RatingDef {
 const RATINGS: RatingDef[] = [
   { k: 'hard', short: 'Again', full: 'Again / Hard', hot: 'H' },
   { k: 'good', short: 'Good', full: 'Good', hot: 'G' },
-  { k: 'easy', short: 'Easy', full: 'Easy · Skip Similar', hot: 'E' },
+  { k: 'easy', short: 'Easy', full: 'Easy · Skip Similar', hot: 'X' },
 ]
 
 const TONE: Record<string, string> = {
@@ -38,6 +39,19 @@ const KEY: Record<string, string> = {
   correct: 'border-good bg-good text-white',
   wrong: 'border-bad bg-bad text-white',
   dim: 'border-line bg-sunken text-muted',
+}
+
+const LETTERS: Record<string, OptionKey> = {
+  a: 'A',
+  b: 'B',
+  c: 'C',
+  d: 'D',
+  e: 'E',
+  '1': 'A',
+  '2': 'B',
+  '3': 'C',
+  '4': 'D',
+  '5': 'E',
 }
 
 const EMPTY: Answer = { selected: null, struck: [] }
@@ -158,12 +172,30 @@ export default function Player({ session, onExit, onReview }: Props) {
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
       if (e.metaKey || e.ctrlKey || e.altKey || !q) return
       const key = e.key.toLowerCase()
-      const letters: Record<string, OptionKey> = { a: 'A', b: 'B', c: 'C', d: 'D', '1': 'A', '2': 'B', '3': 'C', '4': 'D' }
-      if (letters[key]) {
+
+      if (reveal && (key === 'x' || key === '3')) {
         e.preventDefault()
+        rate('easy')
+        return
+      }
+      if (reveal && key === 'h') {
+        e.preventDefault()
+        rate('hard')
+        return
+      }
+      if (reveal && key === 'g') {
+        e.preventDefault()
+        rate('good')
+        return
+      }
+
+      const k = LETTERS[key]
+      if (k) {
+        e.preventDefault()
+        if (!optionKeysOf(q).includes(k)) return
         if (e.shiftKey) {
-          if (/^[abcd]$/.test(key)) strike(letters[key])
-        } else choose(letters[key])
+          if (/^[a-e]$/.test(key)) strike(k)
+        } else choose(k)
         return
       }
       if (key === 'arrowright' || key === 'enter') {
@@ -173,9 +205,6 @@ export default function Player({ session, onExit, onReview }: Props) {
         e.preventDefault()
         go(-1)
       } else if (key === 'f') toggleFlag(q.id)
-      else if (key === 'h') rate('hard')
-      else if (key === 'g') rate('good')
-      else if (key === 'e') rate('easy')
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -209,8 +238,10 @@ export default function Player({ session, onExit, onReview }: Props) {
     )
   }
 
+  const keys = optionKeysOf(q)
   const flagged = state.flagged.includes(q.id)
   const isCorrectPick = ans.selected === q.correct_option
+  const strikeHint = keys.length === 5 ? 'Shift + A–E' : 'Shift + A–D'
   const timerCls =
     remaining < 60
       ? 'animate-pulse border-amber-500 text-amber-600 dark:text-amber-400'
@@ -292,7 +323,7 @@ export default function Player({ session, onExit, onReview }: Props) {
           </article>
 
           <div className="space-y-2">
-            {OPTION_KEYS.map((k) => {
+            {keys.map((k) => {
               const isCorrect = k === q.correct_option
               const picked = ans.selected === k
               const struck = ans.struck.includes(k)
@@ -316,7 +347,7 @@ export default function Player({ session, onExit, onReview }: Props) {
                       {reveal && isCorrect ? <Check size={14} strokeWidth={3} /> : reveal && picked ? <X size={14} strokeWidth={3} /> : k}
                     </span>
                     <span className={`flex-1 text-[15px] leading-snug ${struck && !reveal ? 'text-muted line-through' : ''}`}>
-                      {q[`option_${k}` as const]}
+                      {optionText(q, k)}
                     </span>
                   </button>
                   {!locked && (
@@ -370,8 +401,8 @@ export default function Player({ session, onExit, onReview }: Props) {
               <div className="px-5 py-4">
                 <p className={label}>Differential / option analysis</p>
                 <ul className="mt-1 divide-y divide-line">
-                  {OPTION_KEYS.map((k) => {
-                    const d = q.distractor_explanations[k]
+                  {keys.map((k) => {
+                    const d = distractorOf(q, k)
                     const ok = k === q.correct_option
                     return (
                       <li key={k} className="flex items-start gap-3 py-2.5">
@@ -427,7 +458,7 @@ export default function Player({ session, onExit, onReview }: Props) {
             </div>
           ) : (
             <>
-              <p className="flex-1 text-center text-xs text-muted">Select an answer · Shift + A–D to strike</p>
+              <p className="flex-1 text-center text-xs text-muted">Select an answer · {strikeHint} to strike</p>
               {mode === 'tutor' && (
                 <button onClick={finish} className={`${btnGhost} px-3 py-2 text-xs`}>
                   End Block

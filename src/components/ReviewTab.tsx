@@ -1,10 +1,11 @@
 import { Flag, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { getIcon } from '../lib/meta'
+import { distractorOf, optionKeysOf } from '../lib/options'
 import { weakQuestions } from '../lib/stats'
 import { useStore } from '../lib/store'
 import { btnPrimary, card, label, tag } from '../lib/ui'
-import { OPTION_KEYS, type SessionMode } from '../types/qbank'
+import type { SessionMode } from '../types/qbank'
 
 export default function ReviewTab({ onStart }: { onStart: (ids: string[], title: string, mode?: SessionMode) => void }) {
   const { questions, state } = useStore()
@@ -21,7 +22,7 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
     return questions.filter((q) => {
       if (isNum) {
         const n = Number(num)
-        return q.correct_fa_page === n || OPTION_KEYS.some((k) => q.distractor_explanations[k].fa_page === n)
+        return q.correct_fa_page === n || optionKeysOf(q).some((k) => distractorOf(q, k).fa_page === n)
       }
       return q.concept_name.toLowerCase().includes(s) || q.concept_id.toLowerCase().includes(s)
     })
