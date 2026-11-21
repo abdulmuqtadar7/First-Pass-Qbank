@@ -1,3 +1,5 @@
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, RotateCcw, Sparkles, Target } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useMemo } from 'react'
 import { btnGhost, btnPrimary, card, label, tag } from '../lib/ui'
 import type { Answer, OptionKey, Question, SessionMode } from '../types/qbank'
@@ -9,111 +11,58 @@ interface Props {
   mode: SessionMode
   elapsed: number
   onReview: (ids: string[], prefill: Record<string, OptionKey>) => void
+  onRestart: () => void
   onExit: () => void
 }
 
-const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+const fmt = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 
-export default function BlockReport({ questions, answers, times, mode, elapsed, onReview, onExit }: Props) {
-  const rows = useMemo(
-    () => questions.map((q) => ({ q, sel: answers[q.id]?.selected ?? null, t: times[q.id] ?? 0 })),
-    [questions, answers, times],
-  )
-
-  const answered = rows.filter((r) => r.sel !== null)
-  const correct = rows.filter((r) => r.sel === r.q.correct_option)
+export default function BlockReport({ questions, answers, times, mode, elapsed, onReview, onRestart, onExit }: Props) {
+  const rows = useMemo(() => questions.map((q) => ({ q, selected: answers[q.id]?.selected ?? null, seconds: times[q.id] ?? 0 })), [questions, answers, times])
+  const answered = rows.filter((r) => r.selected !== null)
+  const correct = rows.filter((r) => r.selected === r.q.correct_option)
   const denom = mode === 'exam' ? rows.length : answered.length
-  const pct = denom ? Math.round((correct.length / denom) * 100) : 0
-  const totalTime = rows.reduce((a, r) => a + r.t, 0)
+  const percent = denom ? Math.round(correct.length / denom * 100) : 0
+  const totalTime = rows.reduce((sum, r) => sum + r.seconds, 0)
   const avg = answered.length ? Math.round(totalTime / answered.length) : 0
 
   const concepts = useMemo(() => {
-    const m = new Map<string, { c: number; n: number }>()
+    const map = new Map<string, { correct: number; total: number }>()
     for (const r of rows) {
-      if (mode !== 'exam' && r.sel === null) continue
-      const cur = m.get(r.q.concept_name) ?? { c: 0, n: 0 }
-      cur.n += 1
-      if (r.sel === r.q.correct_option) cur.c += 1
-      m.set(r.q.concept_name, cur)
+      if (mode !== 'exam' && r.selected === null) continue
+      const current = map.get(r.q.concept_name) ?? { correct: 0, total: 0 }
+      current.total++
+      if (r.selected === r.q.correct_option) current.correct++
+      map.set(r.q.concept_name, current)
     }
-    return [...m.entries()].sort((a, b) => a[1].c / a[1].n - b[1].c / b[1].n)
+    return [...map.entries()].sort((a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total)
   }, [rows, mode])
 
-  const missed = rows.filter((r) =>
-    mode === 'exam' ? r.sel !== r.q.correct_option : r.sel !== null && r.sel !== r.q.correct_option,
-  )
-
+  const missed = rows.filter((r) => mode === 'exam' ? r.selected !== r.q.correct_option : r.selected !== null && r.selected !== r.q.correct_option)
   const prefill: Record<string, OptionKey> = {}
-  for (const r of rows) if (r.sel) prefill[r.q.id] = r.sel
-
-  const scoreCls = pct >= 70 ? 'text-good' : pct < 50 ? 'text-bad' : 'text-ink'
+  for (const row of rows) if (row.selected) prefill[row.q.id] = row.selected
+  const scoreTone = percent >= 70 ? 'text-good' : percent < 50 ? 'text-bad' : 'text-accent'
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-canvas text-ink">
-      <div className="animate-rise mx-auto max-w-2xl space-y-6 px-4 pb-12 pt-[max(1.5rem,env(safe-area-inset-top))]">
-        <header>
-          <p className={label}>Block report · {mode === 'exam' ? 'Timed exam' : 'Tutor'}</p>
-          <p className={`mt-2 text-6xl font-semibold tabular-nums tracking-tight ${scoreCls}`}>{pct}%</p>
-          <p className="mt-1 font-mono text-xs tabular-nums text-muted">
-            {correct.length} / {denom} correct
-            {mode === 'exam' && rows.length - answered.length > 0 ? ` · ${rows.length - answered.length} unanswered` : ''}
-          </p>
-        </header>
+      <div className="mx-auto max-w-3xl space-y-6 px-4 pb-12 pt-[max(2rem,env(safe-area-inset-top))] sm:px-6 sm:pt-12">
+        <header className="flex items-center justify-between"><div><p className={label}>Session complete</p><h1 className="mt-2 text-[27px] font-bold tracking-[-.055em]">Your session report<span className="text-accent">.</span></h1></div><button onClick={onExit} className={btnGhost}><ArrowLeft size={15} /> Back</button></header>
 
-        <section className={`${card} grid grid-cols-3 divide-x divide-line`}>
-          <Cell label="Avg sec / Q" value={String(avg)} />
-          <Cell label="Time used" value={fmt(elapsed)} />
-          <Cell label="Answered" value={`${answered.length}/${rows.length}`} />
+        <section className={`${card} relative overflow-hidden bg-[linear-gradient(135deg,var(--surface),var(--sunken))] p-7 sm:p-9`}>
+          <div className="fine-grid pointer-events-none absolute -right-14 -top-10 h-60 w-60 opacity-30 [mask-image:radial-gradient(circle,black,transparent_75%)]" />
+          <div className="relative flex flex-wrap items-center justify-between gap-6"><div><p className={`${label} flex items-center gap-2`}><Sparkles size={13} className="text-accent" /> Your result</p><p className={`mt-3 text-[78px] font-semibold leading-none tracking-[-.08em] tabular-nums ${scoreTone}`}>{percent}<span className="ml-1 text-[35px] font-normal">%</span></p><p className="mt-3 text-[12px] text-muted">{correct.length} of {denom} correct {mode === 'exam' ? `· ${rows.length - answered.length} unanswered` : ''}</p></div><span className="grid h-20 w-20 place-items-center rounded-3xl border border-accent/15 bg-accent/8 text-accent"><CheckCircle2 size={36} strokeWidth={1.5} /></span></div>
         </section>
 
-        <section className={card}>
-          <p className={`${label} px-5 pt-4`}>Concept accuracy</p>
-          <ul className="divide-y divide-line px-5 pb-2 pt-1">
-            {concepts.length === 0 && <li className="py-3 text-sm text-muted">No answered questions.</li>}
-            {concepts.map(([name, v]) => {
-              const p = Math.round((v.c / v.n) * 100)
-              return (
-                <li key={name} className="py-3">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate">{name}</span>
-                    <span className={tag}>
-                      {v.c}/{v.n}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-[2px] rounded-full bg-line">
-                    <div className={`h-full rounded-full ${p >= 70 ? 'bg-good' : p < 50 ? 'bg-bad' : 'bg-ink'}`} style={{ width: `${p}%` }} />
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
+        <div className="grid grid-cols-3 gap-3"><Metric Icon={Clock3} title="Avg / Question" value={`${avg}s`} /><Metric Icon={Clock3} title="Time used" value={fmt(elapsed)} /><Metric Icon={Target} title="Answered" value={`${answered.length}/${rows.length}`} /></div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            disabled={!missed.length}
-            onClick={() => onReview(missed.map((r) => r.q.id), prefill)}
-            className={`${btnPrimary} flex-1`}
-          >
-            Review missed ({missed.length})
-          </button>
-          <button onClick={() => onReview(rows.map((r) => r.q.id), prefill)} className={`${btnGhost} flex-1`}>
-            Review all
-          </button>
-          <button onClick={onExit} className={`${btnGhost} flex-1`}>
-            Done
-          </button>
-        </div>
+        <section className={`${card} overflow-hidden`}><div className="border-b border-line px-6 py-5"><p className={label}>Knowledge map</p><h2 className="mt-1 text-[17px] font-bold tracking-tight">Concept accuracy</h2></div><ul className="divide-y divide-line px-6">{concepts.length === 0 && <li className="py-7 text-[13px] text-muted">No answers recorded yet.</li>}{concepts.map(([name, item]) => { const p = Math.round(item.correct / item.total * 100); return <li key={name} className="py-4"><div className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-[13px] font-semibold">{name}</span><span className={tag}>{item.correct}/{item.total}</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken"><motion.div initial={{ width: 0 }} whileInView={{ width: `${p}%` }} viewport={{ once: true }} className={`h-full rounded-full ${p >= 70 ? 'bg-good' : p < 50 ? 'bg-bad' : 'bg-accent'}`} /></div></li> })}</ul></section>
+
+        <div className="flex flex-col gap-2 sm:flex-row"><button disabled={!missed.length} onClick={() => onReview(missed.map((r) => r.q.id), prefill)} className={`${btnPrimary} flex-1`}>Review missed ({missed.length}) <ArrowRight size={15} /></button><button onClick={() => onReview(rows.map((r) => r.q.id), prefill)} className={`${btnGhost} flex-1`}>Review all</button><button onClick={onRestart} className={`${btnGhost} flex-1`}><RotateCcw size={15} /> New random session</button></div>
       </div>
     </div>
   )
 }
 
-function Cell({ label: l, value }: { label: string; value: string }) {
-  return (
-    <div className="px-4 py-3.5">
-      <p className={label}>{l}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight">{value}</p>
-    </div>
-  )
+function Metric({ Icon, title, value }: { Icon: typeof Clock3; title: string; value: string }) {
+  return <div className={`${card} p-4 sm:p-5`}><div className="flex items-center gap-1.5 text-[10px] text-muted"><Icon size={13} /> {title}</div><p className="mt-3 text-[20px] font-bold tracking-tight tabular-nums sm:text-[24px]">{value}</p></div>
 }

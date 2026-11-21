@@ -1,45 +1,37 @@
-import { Clock, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowRight, Clock3, GraduationCap, Settings2, Sparkles, Timer, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useMemo, useState } from 'react'
 import { SYSTEMS } from '../lib/data'
 import { buildBlock, eligible } from '../lib/blocks'
+import { countConcepts } from '../lib/sessionBuilder'
 import { useStore } from '../lib/store'
 import { btnPrimary, iconBtn, label } from '../lib/ui'
-import type { BlockConfig, FilterKey, SessionMode } from '../types/qbank'
+import type { BlockConfig, CoverageMode, FilterKey, SessionMode, SessionSource } from '../types/qbank'
+import CoverageSelector from './CoverageSelector'
 
 const FILTERS: { k: FilterKey; label: string }[] = [
-  { k: 'all', label: 'All' },
-  { k: 'unanswered', label: 'Unanswered Only' },
-  { k: 'incorrect', label: 'Incorrect / Review' },
-  { k: 'flagged', label: 'Flagged' },
+  { k: 'all', label: 'All questions' },
+  { k: 'unanswered', label: 'Unanswered' },
+  { k: 'incorrect', label: 'Needs review' },
+  { k: 'flagged', label: 'Bookmarked' },
 ]
 
-const SIZES: { v: number; label: string }[] = [
-  { v: 10, label: '10 Qs' },
-  { v: 20, label: '20 Qs / 30 min — 2026 USMLE Step 1 Pace' },
-  { v: 40, label: '40 Qs / 60 min' },
-  { v: 0, label: 'All' },
-]
+const SIZES = [10, 20, 40, 0]
 
 interface Props {
   open: boolean
   onClose: () => void
-  onStart: (ids: string[], title: string, mode: SessionMode) => void
+  onStart: (ids: string[], title: string, mode: SessionMode, source?: SessionSource) => void
 }
 
-const seg = (on: boolean) =>
-  `flex-1 px-3 py-2.5 text-left text-sm transition-colors ${
-    on ? 'bg-accent/10 font-semibold text-accent' : 'text-ink hover:bg-sunken'
-  }`
-
-const chip = (on: boolean) =>
-  `rounded-md border px-3 py-1.5 text-sm transition-colors ${
-    on ? 'border-accent bg-accent/10 font-semibold text-accent' : 'border-line text-ink hover:bg-sunken'
-  }`
+const chip = (active: boolean) =>
+  `rounded-lg border px-3 py-2 text-[11px] font-semibold transition-all ${active ? 'border-accent/40 bg-accent/10 text-accent' : 'border-line bg-surface text-muted hover:border-accent/25 hover:text-ink'}`
 
 export default function BlockBuilder({ open, onClose, onStart }: Props) {
   const { questions, state } = useStore()
   const [mode, setMode] = useState<'tutor' | 'exam'>('tutor')
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [coverageMode, setCoverageMode] = useState<CoverageMode>('core_concepts')
   const [systems, setSystems] = useState<string[]>([])
   const [size, setSize] = useState(20)
 
@@ -50,112 +42,69 @@ export default function BlockBuilder({ open, onClose, onStart }: Props) {
   }, [questions])
 
   const pool = useMemo(() => eligible(questions, { filter, systems }, state), [questions, filter, systems, state])
-  const count = size > 0 ? Math.min(size, pool.length) : pool.length
+  const concepts = useMemo(() => countConcepts(pool), [pool])
+  const availableCount = coverageMode === 'core_concepts' ? concepts : pool.length
+  const count = size > 0 ? Math.min(size, availableCount) : availableCount
 
-  if (!open) return null
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
 
   function toggleSystem(name: string) {
     const k = name.toLowerCase()
-    setSystems((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]))
+    setSystems((current) => current.includes(k) ? current.filter((x) => x !== k) : [...current, k])
   }
 
   function go() {
-    const cfg: BlockConfig = { mode, filter, systems, size }
-    const ids = buildBlock(questions, cfg, state).map((q) => q.id)
-    onStart(ids, mode === 'exam' ? 'Timed Exam Block' : 'Custom Block', mode)
+    const config: BlockConfig = { mode, filter, systems, size, coverageMode }
+    const ids = buildBlock(questions, config, state).map((q) => q.id)
+    onStart(ids, mode === 'exam' ? 'Timed Exam Block' : 'Custom Block', mode, { kind: 'block', config })
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
-      <div className="animate-fade absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="animate-rise relative z-10 max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-lg border border-line bg-surface shadow-xl md:rounded-lg">
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold tracking-tight">Custom Block</h2>
-          <button onClick={onClose} aria-label="Close" className={iconBtn}>
-            <X size={16} />
-          </button>
-        </div>
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+          <motion.div className="absolute inset-0 bg-[#0b0d11]/65 backdrop-blur-[5px]" onClick={onClose} />
+          <motion.div role="dialog" aria-modal="true" aria-label="Build a custom session" initial={{ y: 28, scale: 0.97, opacity: 0 }} animate={{ y: 0, scale: 1, opacity: 1 }} exit={{ y: 16, scale: 0.98, opacity: 0 }} className="surface-float relative z-10 flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-line bg-surface sm:rounded-3xl">
+            <header className="flex items-center justify-between border-b border-line px-6 py-5">
+              <div><p className={label}>Practice / Configuration</p><h2 className="mt-1.5 flex items-center gap-2 text-[21px] font-bold tracking-[-.04em]"><Settings2 size={19} className="text-accent" /> Build a session</h2></div>
+              <button onClick={onClose} aria-label="Close custom session" className={`${iconBtn} border border-line bg-sunken`}><X size={17} /></button>
+            </header>
 
-        <div className="space-y-5 px-5 py-5">
-          <section>
-            <p className={`${label} mb-2`}>Mode</p>
-            <div className="flex divide-x divide-line overflow-hidden rounded-md border border-line">
-              <button onClick={() => setMode('tutor')} className={seg(mode === 'tutor')}>
-                Tutor Mode
-                <span className="block text-xs font-normal text-muted">Instant explanations</span>
-              </button>
-              <button onClick={() => setMode('exam')} className={seg(mode === 'exam')}>
-                Timed Exam Mode
-                <span className="block text-xs font-normal text-muted">Explanations after submission</span>
-              </button>
+            <div className="space-y-6 overflow-y-auto px-6 py-6">
+              <section className="space-y-3">
+                <p className={label}>Learning mode</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {([{ key: 'tutor', name: 'Tutor', Icon: GraduationCap, note: 'Immediate feedback' }, { key: 'exam', name: 'Timed exam', Icon: Timer, note: 'Grade after submission' }] as const).map(({ key, name, Icon, note }) => (
+                    <button key={key} onClick={() => setMode(key)} aria-pressed={mode === key} className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition-all ${mode === key ? 'border-accent/50 bg-accent/8' : 'border-line hover:bg-sunken'}`}>
+                      <span className={`grid h-9 w-9 place-items-center rounded-lg ${mode === key ? 'bg-accent/15 text-accent' : 'bg-sunken text-muted'}`}><Icon size={17} /></span>
+                      <span><span className="block text-[12px] font-semibold">{name}</span><span className="mt-0.5 block text-[10px] text-muted">{note}</span></span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-2.5"><p className={label}>Question filter</p><div className="flex flex-wrap gap-2">{FILTERS.map((item) => <button key={item.k} onClick={() => setFilter(item.k)} aria-pressed={filter === item.k} className={chip(filter === item.k)}>{item.label}</button>)}</div></section>
+
+              <section className="space-y-2.5"><div className="flex justify-between"><p className={label}>Systems</p><span className="font-mono text-[10px] text-muted">{systems.length ? `${systems.length} selected` : 'All systems'}</span></div><div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto"><button onClick={() => setSystems([])} className={chip(systems.length === 0)}>All systems</button>{available.map((name) => <button key={name} onClick={() => toggleSystem(name)} aria-pressed={systems.includes(name.toLowerCase())} className={chip(systems.includes(name.toLowerCase()))}>{name}</button>)}</div></section>
+
+              <CoverageSelector value={coverageMode} onChange={setCoverageMode} total={pool.length} concepts={concepts} filtered={filter !== 'all'} />
+
+              <section className="space-y-2.5"><p className={label}>Session length</p><div className="grid grid-cols-4 gap-2">{SIZES.map((value) => <button key={value} onClick={() => setSize(value)} aria-pressed={size === value} className={`rounded-xl border py-3 text-[12px] font-semibold transition-all ${size === value ? 'border-accent/45 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}>{value === 0 ? 'All' : value}</button>)}</div><p className="text-[10px] text-muted">{size === 0 ? 'Include the full matching pool.' : 'A short, focused block you can finish in one sitting.'}</p></section>
             </div>
-          </section>
 
-          <section>
-            <p className={`${label} mb-2`}>Filter</p>
-            <div className="flex flex-wrap gap-2">
-              {FILTERS.map((f) => (
-                <button key={f.k} onClick={() => setFilter(f.k)} className={chip(filter === f.k)}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <p className={`${label} mb-2`}>Systems</p>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => setSystems([])} className={chip(systems.length === 0)}>
-                All systems
-              </button>
-              {available.map((n) => (
-                <button key={n} onClick={() => toggleSystem(n)} className={chip(systems.includes(n.toLowerCase()))}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <p className={`${label} mb-2`}>Block size</p>
-            <div className="divide-y divide-line overflow-hidden rounded-md border border-line">
-              {SIZES.map((s) => (
-                <button
-                  key={s.v}
-                  onClick={() => setSize(s.v)}
-                  className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
-                    size === s.v ? 'bg-accent/10' : 'hover:bg-sunken'
-                  }`}
-                >
-                  <span
-                    className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
-                      size === s.v ? 'border-accent' : 'border-line'
-                    }`}
-                  >
-                    {size === s.v && <span className="h-2 w-2 rounded-full bg-accent" />}
-                  </span>
-                  <span className={size === s.v ? 'font-semibold text-accent' : ''}>{s.label}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-line bg-surface/90 px-5 py-3.5 backdrop-blur-md">
-          <p className="font-mono text-xs tabular-nums text-muted">
-            {count} ready · {pool.length} match
-            {mode === 'exam' && (
-              <span className="ml-2 inline-flex items-center gap-1 text-ink">
-                <Clock size={12} /> {Math.ceil((count * 90) / 60)} min
-              </span>
-            )}
-          </p>
-          <button disabled={count === 0} onClick={go} className={btnPrimary}>
-            Start {mode === 'exam' ? 'Exam' : 'Block'}
-          </button>
-        </div>
-      </div>
-    </div>
+            <footer className="flex items-center justify-between gap-3 border-t border-line bg-sunken/50 px-6 py-4">
+              <div><p className="font-mono text-[12px] font-bold tabular-nums">{count.toLocaleString()} ready <span className="font-normal text-muted">/ {availableCount.toLocaleString()} matched</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-muted"><Sparkles size={11} className="text-accent" /> Randomized on launch {mode === 'exam' && <>· <Clock3 size={11} /> {Math.ceil(count * 1.5)} min</>}</p></div>
+              <button disabled={count === 0} onClick={go} className={btnPrimary}>Start session <ArrowRight size={15} /></button>
+            </footer>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

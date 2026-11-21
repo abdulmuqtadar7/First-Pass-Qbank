@@ -1,4 +1,5 @@
 import type { Progress, Question } from '../types/qbank'
+import { conceptKey } from './sessionBuilder'
 
 export function dateKey(d = new Date()): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -63,7 +64,7 @@ export function summarize(qs: Question[], progress: Record<string, Progress>): S
 export function conceptsMastered(qs: Question[], progress: Record<string, Progress>): number {
   const groups = new Map<string, Question[]>()
   for (const q of qs) {
-    const k = `${q.system}|${q.concept_id}`
+    const k = conceptKey(q)
     groups.set(k, [...(groups.get(k) ?? []), q])
   }
   let n = 0

@@ -56,19 +56,19 @@ function parse(text: string): Block[] {
 export default function TopicSummary({ text }: { text: string }) {
   const blocks = parse(text)
   return (
-    <div className="space-y-1.5 px-5 py-4 text-[14.5px] leading-[1.65]">
+    <div className="space-y-2 text-[14px] leading-[1.75]">
       {blocks.map((b, i) => {
         if (b.kind === 'gap') return <div key={i} className="h-2" />
         if (b.kind === 'heading')
           return (
-            <p key={i} className="pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted first:pt-0">
+            <p key={i} className="pt-3 text-[10px] font-bold uppercase tracking-[.14em] text-accent first:pt-0">
               {b.text}
             </p>
           )
         if (b.kind === 'bullet')
           return (
             <div key={i} className="flex gap-2.5 whitespace-pre-line" style={{ paddingLeft: b.depth * 18 }}>
-              <span className="mt-[0.62em] h-1 w-1 shrink-0 rounded-full bg-muted" />
+              <span className="mt-[0.62em] h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70" />
               <span className="min-w-0 flex-1">{inline(b.text)}</span>
             </div>
           )

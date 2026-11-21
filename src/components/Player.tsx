@@ -1,5 +1,8 @@
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, EyeOff, Flag, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Flag, Flame, RotateCcw, Shuffle, Strikethrough, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
+import { fisherYates } from '../lib/sessionBuilder'
+import { computeStreak } from '../lib/stats'
 import { optionKeysOf, optionText } from '../lib/options'
 import { useStore } from '../lib/store'
 import { btnGhost, btnPrimary, card, iconBtn, label, tag } from '../lib/ui'
@@ -11,6 +14,7 @@ interface Props {
   session: Session
   onExit: () => void
   onReview: (ids: string[], prefill: Record<string, OptionKey>) => void
+  onRestart: () => void
 }
 
 interface RatingDef {
@@ -59,10 +63,10 @@ const EMPTY: Answer = { selected: null, struck: [] }
 const pad = (n: number) => String(n).padStart(2, '0')
 const fmt = (s: number) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`
 
-export default function Player({ session, onExit, onReview }: Props) {
+export default function Player({ session, onExit, onReview, onRestart }: Props) {
   const { byId, state, recordAnswer, setConfidence, toggleFlag } = useStore()
   const mode = session.mode
-  const [queue] = useState(() => session.ids.filter((id) => byId.has(id)))
+  const [queue, setQueue] = useState(() => session.ids.filter((id) => byId.has(id)))
   const total = queue.length
   const [pos, setPos] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Answer>>(() => {
@@ -71,6 +75,7 @@ export default function Player({ session, onExit, onReview }: Props) {
     return init
   })
   const [ratings, setRatings] = useState<Record<string, Confidence>>({})
+  const [strikeMode, setStrikeMode] = useState(false)
   const [done, setDone] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const startedAt = useRef(Date.now())
@@ -86,9 +91,35 @@ export default function Player({ session, onExit, onReview }: Props) {
   const limit = total * 90
   const remaining = Math.max(0, limit - Math.floor((now - startedAt.current) / 1000))
   const ans: Answer = (q && answers[q.id]) || EMPTY
+  const coverageMode = session.source?.kind === 'system' ? session.source.coverageMode : session.source?.kind === 'block' ? session.source.config.coverageMode : undefined
   const locked = mode === 'review' || (mode === 'tutor' && ans.selected !== null)
   const reveal = locked
   const answeredCount = queue.filter((id) => answers[id]?.selected).length
+  const unansweredAhead = queue.slice(pos + 1).filter((id) => !answers[id]?.selected).length
+  const streak = computeStreak(state.studyDates)
+
+  function shuffleRemaining() {
+    if (unansweredAhead < 2) return
+    setQueue((previous) => {
+      const slots: number[] = []
+      const pending: string[] = []
+      for (let i = pos + 1; i < previous.length; i++) {
+        if (!answers[previous[i]]?.selected) {
+          slots.push(i)
+          pending.push(previous[i])
+        }
+      }
+      const mixed = fisherYates(pending)
+      const next = [...previous]
+      slots.forEach((slot, i) => { next[slot] = mixed[i] })
+      return next
+    })
+  }
+
+  function restartSession() {
+    if (answeredCount > 0 && !window.confirm('Start a new random session? This clears current session answers, but preserves saved progress.')) return
+    onRestart()
+  }
 
   useEffect(() => {
     if (done) return
@@ -104,7 +135,7 @@ export default function Player({ session, onExit, onReview }: Props) {
     strip.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
-  }, [pos])
+  }, [pos, queue])
 
   function submit() {
     if (submitted.current) return
@@ -138,6 +169,7 @@ export default function Player({ session, onExit, onReview }: Props) {
   function choose(k: OptionKey) {
     if (!q || locked) return
     setAnswers((a) => ({ ...a, [q.id]: { selected: k, struck: a[q.id]?.struck ?? [] } }))
+    setStrikeMode(false)
     if (mode === 'tutor') recordAnswer(q.id, k === q.correct_option)
   }
 
@@ -162,9 +194,11 @@ export default function Player({ session, onExit, onReview }: Props) {
   })
 
   useEffect(() => {
-    if (done || mode !== 'tutor' || !q) return
+    // Explicit coverage sessions must present their full selected queue, even if
+    // progress previously marked an angle as skipped through "Easy".
+    if (done || mode !== 'tutor' || !q || coverageMode !== undefined) return
     if (dir.current > 0 && !answers[q.id]?.selected && state.progress[q.id]?.status === 'skipped') go(1)
-  }, [pos, state.progress])
+  }, [pos, state.progress, coverageMode])
 
   useEffect(() => {
     if (done) return
@@ -174,7 +208,7 @@ export default function Player({ session, onExit, onReview }: Props) {
       if (e.metaKey || e.ctrlKey || e.altKey || !q) return
       const key = e.key.toLowerCase()
 
-      if (reveal && (key === 'x' || key === '3')) {
+      if (reveal && key === 'x') {
         e.preventDefault()
         rate('easy')
         return
@@ -187,6 +221,12 @@ export default function Player({ session, onExit, onReview }: Props) {
       if (reveal && key === 'g') {
         e.preventDefault()
         rate('good')
+        return
+      }
+
+      if (key === 's' && !locked) {
+        e.preventDefault()
+        setStrikeMode((value) => !value)
         return
       }
 
@@ -234,6 +274,7 @@ export default function Player({ session, onExit, onReview }: Props) {
         mode={mode}
         elapsed={Math.floor((Date.now() - startedAt.current) / 1000)}
         onReview={onReview}
+        onRestart={onRestart}
         onExit={onExit}
       />
     )
@@ -242,7 +283,7 @@ export default function Player({ session, onExit, onReview }: Props) {
   const keys = optionKeysOf(q)
   const flagged = state.flagged.includes(q.id)
   const isCorrectPick = ans.selected === q.correct_option
-  const strikeHint = keys.length === 5 ? 'Shift + A–E' : 'Shift + A–D'
+  const strikeHint = keys.length === 5 ? '1–5 / A–E to answer · S for strike mode' : '1–4 / A–D to answer · S for strike mode'
   const timerCls =
     remaining < 60
       ? 'animate-pulse border-amber-500 text-amber-600 dark:text-amber-400'
@@ -252,22 +293,18 @@ export default function Player({ session, onExit, onReview }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-canvas text-ink">
-      <header className="border-b border-line bg-surface/80 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="h-[1.5px] w-full bg-line">
-          <div className="h-full bg-accent transition-all duration-300" style={{ width: `${((pos + 1) / total) * 100}%` }} />
+      <header className="relative z-10 border-b border-line bg-surface/95 pt-[env(safe-area-inset-top)] shadow-[0_12px_40px_-35px_rgba(0,0,0,.3)] backdrop-blur-xl">
+        <div className="h-[2px] w-full bg-sunken">
+          <motion.div className="h-full rounded-r-full bg-accent" animate={{ width: `${((pos + 1) / total) * 100}%` }} transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.8 }} />
         </div>
-        <div className="mx-auto flex h-12 max-w-3xl items-center gap-2 px-3">
-          <button onClick={onExit} aria-label="Exit block" className={iconBtn}>
+        <div className="mx-auto flex h-[62px] max-w-4xl items-center gap-2 px-3 sm:px-5">
+          <button onClick={onExit} aria-label="Exit block" className={`${iconBtn} border border-line bg-sunken`}>
             <ArrowLeft size={18} />
           </button>
-          <span className="font-mono text-sm font-medium tabular-nums">
-            {pad(pos + 1)} / {pad(total)}
-          </span>
-          <span className="min-w-0 flex-1 truncate px-2 text-xs text-muted">
-            {mode === 'exam' ? q.system : `${q.system} · ${q.concept_name}`}
-          </span>
+          <div className="min-w-0 flex-1 pl-1 sm:pl-3"><p className="truncate text-[12px] font-semibold tracking-tight">{session.title}</p><p className="mt-0.5 truncate font-mono text-[10px] text-muted">Question {pad(pos + 1)} <span className="text-muted/50">/</span> {pad(total)} <span className="px-1 text-muted/40">·</span> {mode === 'exam' ? q.system : q.concept_name}</p></div>
+          <span title="Daily study streak" className="hidden items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 py-1.5 text-[11px] font-semibold text-muted sm:inline-flex"><Flame size={13} className="text-orange-500" /> {streak}d</span>
           {mode === 'exam' && (
-            <span className={`rounded border px-2 py-1 font-mono text-xs font-medium tabular-nums ${timerCls}`}>
+            <span className={`rounded-lg border px-2.5 py-2 font-mono text-[11px] font-semibold tabular-nums ${timerCls}`}>
               {fmt(remaining)}
             </span>
           )}
@@ -280,7 +317,31 @@ export default function Player({ session, onExit, onReview }: Props) {
             <Flag size={17} fill={flagged ? 'currentColor' : 'none'} />
           </button>
         </div>
-        <div ref={strip} className="no-scrollbar mx-auto flex max-w-3xl gap-1 overflow-x-auto px-3 pb-2">
+        <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 pb-3 sm:px-5">
+          <span className="mr-auto inline-flex min-w-0 items-center truncate rounded-lg border border-accent/15 bg-accent/8 px-2.5 py-1.5 text-[10px] font-semibold text-accent">
+            {coverageMode === 'core_concepts' ? 'Complete Coverage · 1 per concept' : coverageMode === 'all' ? 'Full Bank · All angles' : mode === 'review' ? 'Review session' : 'Practice drill'}
+          </span>
+          <button type="button" aria-pressed={strikeMode} onClick={() => setStrikeMode((value) => !value)} title="Toggle strike mode (S)" disabled={locked} className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-35 ${strikeMode ? 'border-accent/40 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}><Strikethrough size={14} /><span className="hidden sm:inline">Strike mode</span><span className="sm:hidden">S</span></button>
+          <button
+            type="button"
+            onClick={shuffleRemaining}
+            disabled={unansweredAhead < 2}
+            aria-label="Shuffle Remaining"
+            title="Shuffle remaining unanswered questions; keep this and answered questions in place"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-35"
+          >
+            <Shuffle size={13} /> <span className="hidden sm:inline">Shuffle Remaining</span><span className="sm:hidden">Shuffle</span>
+          </button>
+          <button
+            type="button"
+            onClick={restartSession}
+            title="Restart with a new random question queue and fresh concept representatives"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink"
+          >
+            <RotateCcw size={13} /> <span className="hidden sm:inline">New Random Session</span><span className="sm:hidden">Restart</span>
+          </button>
+        </div>
+        <div ref={strip} aria-label="Question navigator" className="no-scrollbar mx-auto flex max-w-4xl gap-1.5 overflow-x-auto px-3 pb-3 sm:px-5">
           {queue.map((id, i) => {
             const a = answers[id]
             const qq = byId.get(id)
@@ -298,8 +359,8 @@ export default function Player({ session, onExit, onReview }: Props) {
                   dir.current = i >= pos ? 1 : -1
                   setPos(i)
                 }}
-                className={`relative h-6 min-w-7 shrink-0 rounded px-1.5 font-mono text-[11px] tabular-nums transition-colors ${
-                  cur ? 'bg-ink font-semibold text-canvas' : cls
+                className={`relative h-7 min-w-8 shrink-0 rounded-lg px-1.5 font-mono text-[10px] font-semibold tabular-nums transition-colors ${
+                  cur ? 'bg-accent text-white shadow-sm' : cls
                 }`}
               >
                 {pad(i + 1)}
@@ -310,20 +371,21 @@ export default function Player({ session, onExit, onReview }: Props) {
         </div>
       </header>
 
-      <div ref={scroller} className="flex-1 overflow-y-auto">
-        <div key={q.id} className="animate-rise mx-auto max-w-3xl space-y-5 px-4 py-6">
-          <article className={card}>
-            <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5">
-              <span className={label}>First Aid 36th Ed</span>
+      <div ref={scroller} className="flex-1 overflow-y-auto overscroll-contain">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={q.id} initial={{ opacity: 0, x: dir.current > 0 ? 22 : -22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir.current > 0 ? -14 : 14 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="mx-auto max-w-4xl space-y-5 px-4 py-6 pb-16 sm:px-5 sm:py-8">
+          <article className={`${card} overflow-hidden`}>
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-sunken/45 px-5 py-3 sm:px-7">
+              <span className={`${label} flex items-center gap-2`}><span className="h-1.5 w-1.5 rounded-full bg-accent" /> Clinical question / First Aid 36e</span>
               <span className="flex items-center gap-1.5">
                 <span className={tag}>{q.system}</span>
                 <span className={tag}>Tier {q.tier}</span>
               </span>
             </div>
-            <p className="max-w-[65ch] px-5 py-5 font-reading text-[15.5px] leading-[1.68]">{q.stem}</p>
+            <p className="max-w-[76ch] px-5 py-7 font-reading text-[17px] leading-[1.9] tracking-[-.005em] sm:px-7 sm:py-9 sm:text-[18px]">{q.stem}</p>
           </article>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5" role="group" aria-label="Answer options">
             {keys.map((k) => {
               const isCorrect = k === q.correct_option
               const picked = ans.selected === k
@@ -332,22 +394,22 @@ export default function Player({ session, onExit, onReview }: Props) {
               if (reveal) tone = isCorrect ? 'correct' : picked ? 'wrong' : 'dim'
               else if (picked) tone = 'picked'
               return (
-                <div key={k} className="group relative">
+                <motion.div key={k} whileHover={!locked ? { x: 3 } : undefined} className="group relative">
                   <button
                     disabled={locked}
-                    onClick={() => choose(k)}
+                    onClick={() => strikeMode ? strike(k) : choose(k)}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       strike(k)
                     }}
-                    className={`flex w-full items-start gap-3 rounded-md border border-l-[3px] py-3 pl-3 pr-12 text-left transition-colors ${TONE[tone]}`}
+                    className={`surface-card flex w-full items-start gap-4 rounded-xl border border-l-[3px] py-4 pl-4 pr-12 text-left transition-all ${TONE[tone]}`}
                   >
                     <span
-                      className={`mt-px grid h-6 w-6 shrink-0 place-items-center rounded border font-mono text-xs font-medium ${KEY[tone]}`}
+                      className={`mt-px grid h-7 w-7 shrink-0 place-items-center rounded-lg border font-mono text-xs font-bold ${KEY[tone]}`}
                     >
                       {reveal && isCorrect ? <Check size={14} strokeWidth={3} /> : reveal && picked ? <X size={14} strokeWidth={3} /> : k}
                     </span>
-                    <span className={`flex-1 text-[15px] leading-snug ${struck && !reveal ? 'text-muted line-through' : ''}`}>
+                    <span className={`flex-1 text-[14px] leading-relaxed sm:text-[15px] ${struck && !reveal ? 'text-muted line-through decoration-bad/70 decoration-2' : ''}`}>
                       {optionText(q, k)}
                     </span>
                   </button>
@@ -355,14 +417,14 @@ export default function Player({ session, onExit, onReview }: Props) {
                     <button
                       onClick={() => strike(k)}
                       aria-label={`Strike through option ${k}`}
-                      className={`absolute right-2 top-2 grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-sunken hover:text-ink md:opacity-0 md:group-hover:opacity-100 ${
+                      className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-sunken hover:text-ink md:opacity-40 md:group-hover:opacity-100 ${
                         struck ? 'bg-sunken text-ink md:opacity-100' : ''
                       }`}
                     >
-                      <EyeOff size={15} />
+                      <Strikethrough size={15} />
                     </button>
                   )}
-                </div>
+                </motion.div>
               )
             })}
           </div>
@@ -372,12 +434,13 @@ export default function Player({ session, onExit, onReview }: Props) {
               <ExplanationSheet q={q} ans={ans} mode={mode} isCorrectPick={isCorrectPick} />
             </div>
           )}
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      <footer className="border-t border-line bg-surface/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-3 py-2.5">
-          <button onClick={() => go(-1)} disabled={pos === 0} aria-label="Previous question" className={`${iconBtn} border border-line bg-surface`}>
+      <footer className="border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-36px_rgba(0,0,0,.4)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 py-3 sm:px-5">
+          <button onClick={() => go(-1)} disabled={pos === 0} aria-label="Previous question" className={`${iconBtn} border border-line bg-sunken`}>
             <ChevronLeft size={18} />
           </button>
 
@@ -391,24 +454,24 @@ export default function Player({ session, onExit, onReview }: Props) {
               </button>
             </>
           ) : reveal ? (
-            <div role="group" className="flex flex-1 divide-x divide-line overflow-hidden rounded-md border border-line bg-surface">
+            <div role="group" className="flex flex-1 divide-x divide-line overflow-hidden rounded-xl border border-line bg-sunken/65">
               {RATINGS.map((r) => (
                 <button
                   key={r.k}
                   onClick={() => rate(r.k)}
-                  className={`flex flex-1 items-center justify-center gap-2 px-2 py-2.5 text-[13px] font-medium transition-colors ${
+                  className={`flex flex-1 items-center justify-center gap-2 px-2 py-2.5 text-[12px] font-semibold transition-colors ${
                     ratings[q.id] === r.k ? 'bg-accent/10 text-accent' : 'text-ink hover:bg-sunken'
                   }`}
                 >
                   <span className="sm:hidden">{r.short}</span>
                   <span className="hidden sm:inline">{r.full}</span>
-                  <kbd className="hidden rounded border border-line px-1 font-mono text-[10px] text-muted md:inline">{r.hot}</kbd>
+                  <kbd className="kbd hidden md:inline-flex">{r.hot}</kbd>
                 </button>
               ))}
             </div>
           ) : (
             <>
-              <p className="flex-1 text-center text-xs text-muted">Select an answer · {strikeHint} to strike</p>
+              <p className="flex-1 text-center text-[11px] text-muted">{strikeMode ? 'Strike mode active · select options to cross out' : strikeHint}</p>
               {mode === 'tutor' && (
                 <button onClick={finish} className={`${btnGhost} px-3 py-2 text-xs`}>
                   End Block
@@ -417,10 +480,11 @@ export default function Player({ session, onExit, onReview }: Props) {
             </>
           )}
 
-          <button onClick={() => go(1)} disabled={mode === 'exam' && pos >= total - 1} aria-label="Next question" className={`${iconBtn} border border-line bg-surface`}>
+          <button onClick={() => go(1)} disabled={mode === 'exam' && pos >= total - 1} aria-label="Next question" className={`${iconBtn} border border-line bg-sunken`}>
             <ChevronRight size={18} />
           </button>
         </div>
+        <div className="mx-auto hidden max-w-4xl items-center justify-center gap-4 border-t border-line/60 px-5 py-2 text-[10px] text-muted md:flex"><span><span className="kbd">A–E</span> Choose</span><span><span className="kbd">S</span> Strike mode</span><span><span className="kbd">↵</span> Next</span><span><span className="kbd">F</span> Flag</span><span>Right-click an option to strike through</span></div>
       </footer>
     </div>
   )

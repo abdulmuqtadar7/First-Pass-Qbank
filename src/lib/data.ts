@@ -1,5 +1,6 @@
 import type { OptionKey, Question, RawQuestion } from '../types/qbank'
 import { OPTION_KEYS } from '../types/qbank'
+import { conceptIdPrefix } from './sessionBuilder'
 
 export const SYSTEMS = [
   'Cardiovascular',
@@ -67,7 +68,6 @@ export function toQuestions(raw: RawQuestion[]): Question[] {
 const STR_KEYS = [
   'system',
   'concept_id',
-  'concept_name',
   'angle',
   'stem',
   'option_A',
@@ -117,6 +117,10 @@ export function validateQuestions(input: unknown): { valid: RawQuestion[]; error
     const q = {
       ...(o as unknown as RawQuestion),
       system: normalizeSystem(o.system as string),
+      concept_name:
+        typeof o.concept_name === 'string' && o.concept_name.trim()
+          ? o.concept_name.trim()
+          : conceptIdPrefix(o.concept_id as string),
       tier: (o.tier as string | number) ?? '2',
       correct_fa_page: cfp,
       distractor_explanations: fixed as RawQuestion['distractor_explanations'],

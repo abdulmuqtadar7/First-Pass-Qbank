@@ -10,10 +10,12 @@ import {
 import type { Confidence, PersistedState, Progress, Question, RawQuestion } from '../types/qbank'
 import { BASE_QUESTIONS, makeId, toQuestions, validateQuestions } from './data'
 import { dateKey } from './stats'
+import { conceptKey } from './sessionBuilder'
 
 const STATE_KEY = 'fp:state:v1'
 const IMPORT_KEY = 'fp:imported:v1'
 const DAILY_KEY = 'fp:daily:v1'
+const UI_THEME_KEY = 'ui_theme'
 export const DAILY_GOAL = 20
 
 const blank = (): Progress => ({ attempts: 0, correct: 0, wrong: 0 })
@@ -27,7 +29,9 @@ function loadState(): PersistedState {
   }
   try {
     const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null')
-    return s ? { ...fallback, ...s } : fallback
+    const persisted = s ? { ...fallback, ...s } : fallback
+    const uiTheme = localStorage.getItem(UI_THEME_KEY)
+    return { ...persisted, theme: uiTheme === 'dark' || uiTheme === 'light' ? uiTheme : persisted.theme }
   } catch {
     return fallback
   }
@@ -82,6 +86,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem(STATE_KEY, JSON.stringify(state))
+    localStorage.setItem(UI_THEME_KEY, state.theme)
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
   }, [state])
 
@@ -147,7 +152,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const q = byId.get(id)
           if (q) {
             for (const o of questions) {
-              if (o.concept_id === q.concept_id && o.id !== id) {
+              if (conceptKey(o) === conceptKey(q) && o.id !== id) {
                 const p = progress[o.id]
                 if (!p || p.attempts === 0) progress[o.id] = { ...(p ?? blank()), status: 'skipped' }
               }

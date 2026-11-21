@@ -1,13 +1,7 @@
 import type { BlockConfig, PersistedState, Question } from '../types/qbank'
+import { fisherYates, selectSessionQuestions } from './sessionBuilder'
 
-export function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
+export const shuffle = fisherYates
 
 export function eligible(
   questions: Question[],
@@ -31,7 +25,7 @@ export function eligible(
 }
 
 export function buildBlock(questions: Question[], cfg: BlockConfig, state: PersistedState): Question[] {
-  const pool = shuffle(eligible(questions, cfg, state))
+  const pool = selectSessionQuestions(eligible(questions, cfg, state), cfg.coverageMode, state.progress)
   return cfg.size > 0 ? pool.slice(0, cfg.size) : pool
 }
 

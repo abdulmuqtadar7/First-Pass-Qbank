@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Database, FileJson2, UploadCloud } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { BUNDLED_FILES, validateQuestions } from '../lib/data'
 import { navigate } from '../lib/nav'
@@ -32,20 +32,21 @@ export default function Admin() {
 
   return (
     <div className={page}>
-      <div className="mx-auto max-w-2xl space-y-6 px-4 pb-16 pt-[max(1.5rem,env(safe-area-inset-top))]">
-        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-muted transition-colors hover:text-ink">
-          <ArrowLeft size={15} /> Back to app
+      <div className="mx-auto max-w-3xl space-y-7 px-4 pb-16 pt-[max(2rem,env(safe-area-inset-top))] sm:px-6 sm:pt-10">
+        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[12px] font-semibold text-muted transition-colors hover:text-accent">
+          <ArrowLeft size={15} /> Back to your study desk
         </button>
         <header>
-          <p className={label}>Admin</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Question bank</h1>
+          <p className={`${label} flex items-center gap-2`}><Database size={13} className="text-accent" /> Library / Administration</p>
+          <h1 className="mt-2 text-[30px] font-bold tracking-[-.055em] sm:text-[36px]">Manage your library<span className="text-accent">.</span></h1>
+          <p className="mt-1 text-[13px] text-muted">Your questions stay yours. Import, inspect and organize without losing progress.</p>
         </header>
 
         <section className={`${card} overflow-hidden`}>
-          <p className={`${label} px-5 pt-4`}>Bundled files · src/data/*.json</p>
+          <div className="flex items-center justify-between border-b border-line px-5 py-4"><p className={label}>Bundled files · src/data/*.json</p><FileJson2 size={16} className="text-accent" /></div>
           <ul className="divide-y divide-line px-5 pb-2 pt-1">
             {BUNDLED_FILES.map((f) => (
-              <li key={f.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+              <li key={f.name} className="flex items-center justify-between gap-3 py-3 text-sm">
                 <span className="truncate font-mono text-xs">{f.name}</span>
                 <span className="flex items-center gap-2">
                   <span className={tag}>{f.count} Qs</span>
@@ -55,28 +56,29 @@ export default function Admin() {
             ))}
             {BUNDLED_FILES.length === 0 && <li className="py-3 text-sm text-muted">No JSON files found in src/data.</li>}
           </ul>
-          <p className="border-t border-line px-5 py-3 text-xs text-muted">
+          <p className="border-t border-line bg-sunken/40 px-5 py-3 text-[11px] text-muted">
             Any .json file dropped into src/data is bundled automatically at build time and merged without duplicates.
           </p>
         </section>
 
-        <section className={`${card} space-y-3 p-5`}>
-          <p className={label}>Import in browser</p>
-          <p className="text-sm text-muted">
+        <section className={`${card} space-y-4 p-6`}>
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent/10 text-accent"><UploadCloud size={21} /></span>
+          <div><p className={label}>Bring your own questions</p><h2 className="mt-1.5 text-[17px] font-bold tracking-tight">Import in browser</h2></div>
+          <p className="text-[13px] leading-relaxed text-muted">
             Upload one or more <code className="font-mono text-xs">.json</code> files (4 or 5 options per question). Files are validated,
             de-duplicated and stored in this browser.
           </p>
           <input ref={input} type="file" accept=".json,application/json" multiple hidden onChange={(e) => onFiles(e.target.files)} />
           <button onClick={() => input.current?.click()} className={btnPrimary}>
-            Choose JSON files
+            Choose JSON files <ArrowUpRight size={15} />
           </button>
           {log.length > 0 && (
-            <pre className="whitespace-pre-wrap rounded-md border border-line bg-sunken p-3 font-mono text-xs">{log.join('\n')}</pre>
+            <pre className="whitespace-pre-wrap rounded-xl border border-line bg-sunken p-4 font-mono text-xs">{log.join('\n')}</pre>
           )}
         </section>
 
         <section className={`${card} overflow-hidden`}>
-          <p className={`${label} px-5 pt-4`}>Loaded bank · {questions.length}</p>
+          <p className={`${label} border-b border-line px-5 py-4`}>Loaded bank · {questions.length.toLocaleString()} questions</p>
           <ul className="divide-y divide-line px-5 pb-2 pt-1">
             {[...counts].map(([k, v]) => (
               <li key={k} className="flex justify-between py-2.5 text-sm">

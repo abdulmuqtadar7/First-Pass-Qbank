@@ -55,12 +55,18 @@ export interface PersistedState {
 
 export type SessionMode = 'tutor' | 'exam' | 'review'
 export type FilterKey = 'all' | 'unanswered' | 'incorrect' | 'flagged'
+export type CoverageMode = 'core_concepts' | 'all'
+
+export type SessionSource =
+  | { kind: 'system'; system: string; coverageMode: CoverageMode }
+  | { kind: 'block'; config: BlockConfig }
 
 export interface Session {
   ids: string[]
   title: string
   mode: SessionMode
   prefill?: Record<string, OptionKey>
+  source?: SessionSource
 }
 
 export interface BlockConfig {
@@ -68,6 +74,7 @@ export interface BlockConfig {
   filter: FilterKey
   systems: string[]
   size: number
+  coverageMode: CoverageMode
 }
 
 export interface Answer {
