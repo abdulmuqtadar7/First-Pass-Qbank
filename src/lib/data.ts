@@ -122,6 +122,7 @@ export function validateQuestions(input: unknown): { valid: RawQuestion[]; error
       distractor_explanations: fixed as RawQuestion['distractor_explanations'],
     }
     if (!hasE) delete q.option_E
+    if (typeof q.topic_overview !== "string" || !q.topic_overview.trim()) delete q.topic_overview
     valid.push(q)
   })
   return { valid, errors: errors.slice(0, 12), rejected }

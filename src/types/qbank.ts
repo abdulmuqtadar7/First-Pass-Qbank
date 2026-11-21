@@ -25,6 +25,8 @@ export interface RawQuestion {
     E?: DistractorExplanation
   }
   high_yield_pearl: string
+  /** Optional multi-line Markdown-style First Aid topic summary (bullets, **bold**, "Heading:" lines). */
+  topic_overview?: string
 }
 
 export interface Question extends RawQuestion {

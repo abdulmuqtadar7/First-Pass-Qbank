@@ -1,10 +1,11 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, EyeOff, Flag, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { distractorOf, optionKeysOf, optionText } from '../lib/options'
+import { optionKeysOf, optionText } from '../lib/options'
 import { useStore } from '../lib/store'
 import { btnGhost, btnPrimary, card, iconBtn, label, tag } from '../lib/ui'
 import type { Answer, Confidence, OptionKey, Session } from '../types/qbank'
 import BlockReport from './BlockReport'
+import ExplanationSheet from './ExplanationSheet'
 
 interface Props {
   session: Session
@@ -367,60 +368,9 @@ export default function Player({ session, onExit, onReview }: Props) {
           </div>
 
           {reveal && (
-            <section className={`${card} animate-fade divide-y divide-line`}>
-              <div className="flex items-center gap-2 px-5 py-3 text-sm font-medium">
-                {mode === 'review' ? (
-                  <span className="font-mono text-xs tabular-nums">
-                    {ans.selected ? `Your answer ${ans.selected}` : 'Not answered'} · Correct {q.correct_option}
-                  </span>
-                ) : (
-                  <>
-                    <span className={`h-2 w-2 rounded-full ${isCorrectPick ? 'bg-good' : 'bg-bad'}`} />
-                    <span className={isCorrectPick ? 'text-good' : 'text-bad'}>
-                      {isCorrectPick ? 'Correct' : `Incorrect — answer is ${q.correct_option}`}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              <div className="px-5 py-4">
-                <div className="border-l-2 border-accent pl-4">
-                  <p className={label}>Key takeaway</p>
-                  <p className="mt-1.5 max-w-[65ch] text-[15px] font-medium leading-relaxed">{q.high_yield_pearl}</p>
-                </div>
-              </div>
-
-              <div className="px-5 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className={label}>Mechanism &amp; pathophysiology</p>
-                  <span className={tag}>FA 36e • p. {q.correct_fa_page}</span>
-                </div>
-                <p className="mt-2 max-w-[65ch] text-[15px] leading-[1.65]">{q.correct_explanation}</p>
-              </div>
-
-              <div className="px-5 py-4">
-                <p className={label}>Differential / option analysis</p>
-                <ul className="mt-1 divide-y divide-line">
-                  {keys.map((k) => {
-                    const d = distractorOf(q, k)
-                    const ok = k === q.correct_option
-                    return (
-                      <li key={k} className="flex items-start gap-3 py-2.5">
-                        <span
-                          className={`mt-px grid h-5 w-5 shrink-0 place-items-center rounded border font-mono text-[11px] font-medium ${
-                            ok ? 'border-good bg-good text-white' : 'border-line bg-sunken text-muted'
-                          }`}
-                        >
-                          {k}
-                        </span>
-                        <p className="flex-1 text-sm leading-snug">{d.reason}</p>
-                        <span className={tag}>p. {d.fa_page}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            </section>
+            <div className="space-y-5 pb-6">
+              <ExplanationSheet q={q} ans={ans} mode={mode} isCorrectPick={isCorrectPick} />
+            </div>
           )}
         </div>
       </div>
