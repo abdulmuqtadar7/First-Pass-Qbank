@@ -5,11 +5,13 @@ export const shuffle = fisherYates
 
 export function eligible(
   questions: Question[],
-  cfg: Pick<BlockConfig, 'filter' | 'systems'>,
+  cfg: Pick<BlockConfig, 'filter' | 'systems'> & Partial<Pick<BlockConfig, 'tier' | 'angle'>>,
   state: PersistedState,
 ): Question[] {
   return questions.filter((q) => {
     if (cfg.systems.length && !cfg.systems.includes(q.system.toLowerCase())) return false
+    if (cfg.tier && cfg.tier !== 'all' && String(q.tier) !== cfg.tier) return false
+    if (cfg.angle && cfg.angle !== 'all' && q.angle !== cfg.angle) return false
     const p = state.progress[q.id]
     switch (cfg.filter) {
       case 'unanswered':

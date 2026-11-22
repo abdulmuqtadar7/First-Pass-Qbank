@@ -2,6 +2,7 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, Flag, Flame, RotateCcw, Sh
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { fisherYates } from '../lib/sessionBuilder'
+import { useLearning } from '../lib/learning'
 import { computeStreak } from '../lib/stats'
 import { optionKeysOf, optionText } from '../lib/options'
 import { useStore } from '../lib/store'
@@ -63,23 +64,40 @@ const EMPTY: Answer = { selected: null, struck: [] }
 const pad = (n: number) => String(n).padStart(2, '0')
 const fmt = (s: number) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`
 
+/** On a fresh player launch, reshuffle only future unanswered slots. */
+function shufflePending(items: string[], position: number, answers: Record<string, Answer>): string[] {
+  const next = [...items]
+  const slots: number[] = []
+  for (let i = position + 1; i < next.length; i++) if (!answers[next[i]]?.selected) slots.push(i)
+  const reordered = fisherYates(slots.map((index) => next[index]))
+  slots.forEach((index, i) => { next[index] = reordered[i] })
+  return next
+}
+
 export default function Player({ session, onExit, onReview, onRestart }: Props) {
   const { byId, state, recordAnswer, setConfidence, toggleFlag } = useStore()
+  const { active, setActive, recordAttempt, rateConcept, recordHistory } = useLearning()
   const mode = session.mode
-  const [queue, setQueue] = useState(() => session.ids.filter((id) => byId.has(id)))
+  const restored = active?.session.title === session.title && active.session.mode === session.mode
+    && active.session.ids.join('|') === session.ids.join('|') ? active : null
+  const [queue, setQueue] = useState(() => {
+    const existing = (restored?.queue ?? session.ids).filter((id) => byId.has(id))
+    return restored ? shufflePending(existing, restored.position, restored.answers) : fisherYates(existing)
+  })
   const total = queue.length
-  const [pos, setPos] = useState(0)
+  const [pos, setPos] = useState(Math.min(Math.max(restored?.position ?? 0, 0), Math.max(0, total - 1)))
   const [answers, setAnswers] = useState<Record<string, Answer>>(() => {
+    if (restored) return restored.answers
     const init: Record<string, Answer> = {}
     if (session.prefill) for (const [id, sel] of Object.entries(session.prefill)) init[id] = { selected: sel, struck: [] }
     return init
   })
-  const [ratings, setRatings] = useState<Record<string, Confidence>>({})
+  const [ratings, setRatings] = useState<Record<string, Confidence>>(restored?.ratings ?? {})
   const [strikeMode, setStrikeMode] = useState(false)
   const [done, setDone] = useState(false)
   const [now, setNow] = useState(() => Date.now())
-  const startedAt = useRef(Date.now())
-  const times = useRef<Record<string, number>>({})
+  const startedAt = useRef(restored ? Date.now() - Math.max(0, restored.updatedAt - restored.startedAt) : Date.now())
+  const times = useRef<Record<string, number>>(restored?.times ?? {})
   const curId = useRef('')
   const dir = useRef(1)
   const submitted = useRef(false)
@@ -88,7 +106,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
 
   const q = byId.get(queue[pos])
   curId.current = q?.id ?? ''
-  const limit = total * 90
+  const limit = total * (session.source?.kind === 'block' ? session.source.config.secondsPerQuestion ?? 90 : 90)
   const remaining = Math.max(0, limit - Math.floor((now - startedAt.current) / 1000))
   const ans: Answer = (q && answers[q.id]) || EMPTY
   const coverageMode = session.source?.kind === 'system' ? session.source.coverageMode : session.source?.kind === 'block' ? session.source.config.coverageMode : undefined
@@ -131,6 +149,18 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }, [done])
 
   useEffect(() => {
+    if (done || mode === 'review') return
+    const save = () => setActive({
+      session, queue, position: pos, answers, ratings, times: { ...times.current },
+      startedAt: startedAt.current, updatedAt: Date.now(),
+    })
+    save()
+    const timer = window.setInterval(save, 10_000)
+    document.addEventListener('visibilitychange', save)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', save) }
+  }, [session, queue, pos, answers, ratings, mode, done, setActive])
+
+  useEffect(() => {
     scroller.current?.scrollTo({ top: 0 })
     strip.current
       ?.querySelector('[data-active="true"]')
@@ -144,9 +174,27 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
       for (const id of queue) {
         const a = answers[id]
         const qq = byId.get(id)
-        if (a?.selected && qq) recordAnswer(id, a.selected === qq.correct_option)
+        if (a?.selected && qq) {
+          const correct = a.selected === qq.correct_option
+          recordAnswer(id, correct)
+          recordAttempt(qq, correct, times.current[id] ?? 0, mode)
+        }
       }
     }
+    if (mode !== 'review') {
+      const selections: Record<string, OptionKey | null> = {}
+      let correct = 0; let answered = 0
+      for (const id of queue) {
+        const selected = answers[id]?.selected ?? null
+        selections[id] = selected
+        if (selected) answered++
+        if (selected && selected === byId.get(id)?.correct_option) correct++
+      }
+      recordHistory({ title: session.title, mode, ids: [...queue], selections,
+        times: { ...times.current }, elapsed: Math.floor((Date.now() - startedAt.current) / 1000),
+        correct, answered })
+    }
+    setActive(null)
     setDone(true)
   }
 
@@ -170,7 +218,11 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     if (!q || locked) return
     setAnswers((a) => ({ ...a, [q.id]: { selected: k, struck: a[q.id]?.struck ?? [] } }))
     setStrikeMode(false)
-    if (mode === 'tutor') recordAnswer(q.id, k === q.correct_option)
+    if (mode === 'tutor') {
+      const correct = k === q.correct_option
+      recordAnswer(q.id, correct)
+      recordAttempt(q, correct, times.current[q.id] ?? 0, mode)
+    }
   }
 
   function strike(k: OptionKey) {
@@ -185,6 +237,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   function rate(level: Confidence) {
     if (q === undefined || mode === 'exam' || reveal === false) return
     setConfidence(q.id, level)
+    rateConcept(q, level)
     setRatings((r) => ({ ...r, [q.id]: level }))
     go(1)
   }

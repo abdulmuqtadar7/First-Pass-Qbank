@@ -75,6 +75,9 @@ export interface BlockConfig {
   systems: string[]
   size: number
   coverageMode: CoverageMode
+  tier?: string
+  angle?: string
+  secondsPerQuestion?: number
 }
 
 export interface Answer {

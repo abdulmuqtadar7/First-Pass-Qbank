@@ -34,6 +34,9 @@ export default function BlockBuilder({ open, onClose, onStart }: Props) {
   const [coverageMode, setCoverageMode] = useState<CoverageMode>('core_concepts')
   const [systems, setSystems] = useState<string[]>([])
   const [size, setSize] = useState(20)
+  const [tier, setTier] = useState('all')
+  const [angle, setAngle] = useState('all')
+  const [secondsPerQuestion, setSecondsPerQuestion] = useState(90)
 
   const available = useMemo(() => {
     const names = SYSTEMS.filter((n) => questions.some((q) => q.system.toLowerCase() === n.toLowerCase()))
@@ -41,7 +44,8 @@ export default function BlockBuilder({ open, onClose, onStart }: Props) {
     return names
   }, [questions])
 
-  const pool = useMemo(() => eligible(questions, { filter, systems }, state), [questions, filter, systems, state])
+  const angles = useMemo(() => [...new Set(questions.map((q) => q.angle))].sort(), [questions])
+  const pool = useMemo(() => eligible(questions, { filter, systems, tier, angle }, state), [questions, filter, systems, tier, angle, state])
   const concepts = useMemo(() => countConcepts(pool), [pool])
   const availableCount = coverageMode === 'core_concepts' ? concepts : pool.length
   const count = size > 0 ? Math.min(size, availableCount) : availableCount
@@ -59,7 +63,7 @@ export default function BlockBuilder({ open, onClose, onStart }: Props) {
   }
 
   function go() {
-    const config: BlockConfig = { mode, filter, systems, size, coverageMode }
+    const config: BlockConfig = { mode, filter, systems, size, coverageMode, tier, angle, secondsPerQuestion }
     const ids = buildBlock(questions, config, state).map((q) => q.id)
     onStart(ids, mode === 'exam' ? 'Timed Exam Block' : 'Custom Block', mode, { kind: 'block', config })
     onClose()
@@ -93,13 +97,18 @@ export default function BlockBuilder({ open, onClose, onStart }: Props) {
 
               <section className="space-y-2.5"><div className="flex justify-between"><p className={label}>Systems</p><span className="font-mono text-[10px] text-muted">{systems.length ? `${systems.length} selected` : 'All systems'}</span></div><div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto"><button onClick={() => setSystems([])} className={chip(systems.length === 0)}>All systems</button>{available.map((name) => <button key={name} onClick={() => toggleSystem(name)} aria-pressed={systems.includes(name.toLowerCase())} className={chip(systems.includes(name.toLowerCase()))}>{name}</button>)}</div></section>
 
+              <section className="grid grid-cols-2 gap-3">
+                <label className="space-y-2"><span className={label}>Yield tier</span><select value={tier} onChange={(e) => setTier(e.target.value)} className="w-full rounded-xl border border-line bg-surface p-3 text-xs outline-none focus:border-accent"><option value="all">All tiers</option>{[1,2,3].map((n) => <option key={n} value={String(n)}>Tier {n}</option>)}</select></label>
+                <label className="space-y-2"><span className={label}>Question angle</span><select value={angle} onChange={(e) => setAngle(e.target.value)} className="w-full rounded-xl border border-line bg-surface p-3 text-xs outline-none focus:border-accent"><option value="all">All angles</option>{angles.map((value) => <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>)}</select></label>
+              </section>
+
               <CoverageSelector value={coverageMode} onChange={setCoverageMode} total={pool.length} concepts={concepts} filtered={filter !== 'all'} />
 
-              <section className="space-y-2.5"><p className={label}>Session length</p><div className="grid grid-cols-4 gap-2">{SIZES.map((value) => <button key={value} onClick={() => setSize(value)} aria-pressed={size === value} className={`rounded-xl border py-3 text-[12px] font-semibold transition-all ${size === value ? 'border-accent/45 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}>{value === 0 ? 'All' : value}</button>)}</div><p className="text-[10px] text-muted">{size === 0 ? 'Include the full matching pool.' : 'A short, focused block you can finish in one sitting.'}</p></section>
+              <section className="space-y-2.5"><p className={label}>Session length</p><div className="grid grid-cols-4 gap-2">{SIZES.map((value) => <button key={value} onClick={() => setSize(value)} aria-pressed={size === value} className={`rounded-xl border py-3 text-[12px] font-semibold transition-all ${size === value ? 'border-accent/45 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}>{value === 0 ? 'All' : value}</button>)}</div><label className="flex items-center gap-3 text-[11px] text-muted">Custom question count <input aria-label="Custom question count" type="number" min="1" max="1000" value={size || ''} onChange={(e) => setSize(Math.min(1000, Math.max(1, Number(e.target.value) || 1)))} className="w-24 rounded-lg border border-line bg-surface px-2 py-1.5 text-ink"/></label>{mode === 'exam' && <label className="flex items-center gap-3 text-[11px] text-muted">Time per question <select value={secondsPerQuestion} onChange={(e) => setSecondsPerQuestion(Number(e.target.value))} className="rounded-lg border border-line bg-surface px-2 py-1.5 text-ink"><option value={60}>60 seconds</option><option value={90}>90 seconds</option><option value={120}>120 seconds</option></select></label>}</section>
             </div>
 
             <footer className="flex items-center justify-between gap-3 border-t border-line bg-sunken/50 px-6 py-4">
-              <div><p className="font-mono text-[12px] font-bold tabular-nums">{count.toLocaleString()} ready <span className="font-normal text-muted">/ {availableCount.toLocaleString()} matched</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-muted"><Sparkles size={11} className="text-accent" /> Randomized on launch {mode === 'exam' && <>· <Clock3 size={11} /> {Math.ceil(count * 1.5)} min</>}</p></div>
+              <div><p className="font-mono text-[12px] font-bold tabular-nums">{count.toLocaleString()} ready <span className="font-normal text-muted">/ {availableCount.toLocaleString()} matched</span></p><p className="mt-1 flex items-center gap-1 text-[10px] text-muted"><Sparkles size={11} className="text-accent" /> Randomized on launch {mode === 'exam' && <>· <Clock3 size={11} /> {Math.ceil(count * secondsPerQuestion / 60)} min</>}</p></div>
               <button disabled={count === 0} onClick={go} className={btnPrimary}>Start session <ArrowRight size={15} /></button>
             </footer>
           </motion.div>

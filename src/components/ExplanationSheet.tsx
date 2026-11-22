@@ -1,8 +1,9 @@
-import { BookOpen, Check, CheckCircle2, ChevronDown, FileText, ListChecks, Sparkles, XCircle } from 'lucide-react'
+import { BookOpen, Check, CheckCircle2, ChevronDown, FileText, Highlighter, ListChecks, NotebookPen, Plus, Sparkles, XCircle } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { distractorOf, optionKeysOf, optionText } from '../lib/options'
 import { card, label, tag } from '../lib/ui'
+import { useLearning } from '../lib/learning'
 import type { Answer, Question, SessionMode } from '../types/qbank'
 import TopicSummary from './TopicSummary'
 
@@ -23,7 +24,18 @@ const TABS: { key: ExplanationTab; name: string; Icon: typeof BookOpen }[] = [
 
 export default function ExplanationSheet({ q, ans, mode, isCorrectPick }: Props) {
   const [tab, setTab] = useState<ExplanationTab>('mechanism')
+  const [noteOpen, setNoteOpen] = useState(false)
+  const { notes, saveNote, flashcards, addFlashcard } = useLearning()
   const keys = optionKeysOf(q)
+  const saved = flashcards.some((c) => c.questionId === q.id)
+
+  function captureHighlight() {
+    const selected = window.getSelection()?.toString().trim()
+    if (!selected) { setNoteOpen(true); return }
+    const previous = notes[q.id]?.text ?? ''
+    saveNote(q.id, previous ? `${previous}\n\n• ${selected}` : `• ${selected}`)
+    setNoteOpen(true)
+  }
 
   return (
     <motion.section initial={{ opacity: 0, height: 0, y: -12 }} animate={{ opacity: 1, height: 'auto', y: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.8 }} className={`${card} overflow-hidden border-accent/20`}>
@@ -74,7 +86,13 @@ export default function ExplanationSheet({ q, ans, mode, isCorrectPick }: Props)
           )}
         </motion.div>
       </AnimatePresence>
-      <div className="flex items-center justify-between border-t border-line bg-sunken/35 px-5 py-2.5 text-[10px] text-muted"><span>Learn the mechanism, not just the letter.</span><span className="inline-flex items-center gap-1">Scroll to explore <ChevronDown size={12} /></span></div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-line bg-sunken/35 px-5 py-3">
+        <button onClick={() => setNoteOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><NotebookPen size={13}/> Personal note</button>
+        <button onClick={captureHighlight} title="Select a passage above, then save it to your note" className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><Highlighter size={13}/> Save selection</button>
+        <button onClick={() => addFlashcard(q)} disabled={saved} className="inline-flex items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent disabled:opacity-55"><Plus size={13}/>{saved ? 'Flashcard saved' : 'Make flashcard'}</button>
+        <span className="ml-auto hidden items-center gap-1 text-[10px] text-muted sm:flex">Scroll to explore <ChevronDown size={12}/></span>
+      </div>
+      {noteOpen && <div className="border-t border-line p-5"><label className={label} htmlFor={`fp-note-${q.id}`}>Your note · {q.concept_name}</label><textarea id={`fp-note-${q.id}`} value={notes[q.id]?.text ?? ''} onChange={(e) => saveNote(q.id, e.target.value)} rows={3} placeholder="What should your future self remember?" className="mt-2 w-full resize-y rounded-xl border border-line bg-sunken/40 p-3 text-[13px] leading-relaxed outline-none focus:border-accent"/><p className="mt-1 text-[10px] text-muted">Saved automatically to this browser.</p></div>}
     </motion.section>
   )
 }

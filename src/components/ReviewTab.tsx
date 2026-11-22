@@ -1,19 +1,22 @@
-import { ArrowRight, BookOpen, Flag, RotateCcw, Search, Sparkles, X } from 'lucide-react'
+import { ArrowRight, BookOpen, CalendarClock, Flag, RotateCcw, Search, Sparkles, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { getIcon } from '../lib/meta'
 import { distractorOf, optionKeysOf } from '../lib/options'
 import { weakQuestions } from '../lib/stats'
 import { useStore } from '../lib/store'
+import { dueConceptQuestions, useLearning } from '../lib/learning'
 import { btnPrimary, card, label, tag } from '../lib/ui'
 import type { SessionMode } from '../types/qbank'
 
 export default function ReviewTab({ onStart }: { onStart: (ids: string[], title: string, mode?: SessionMode) => void }) {
   const { questions, state } = useStore()
+  const { schedule } = useLearning()
   const [query, setQuery] = useState('')
   const { progress, flagged } = state
 
   const weak = useMemo(() => weakQuestions(questions, progress, flagged), [questions, progress, flagged])
+  const due = useMemo(() => dueConceptQuestions(questions, schedule, progress), [questions, schedule, progress])
   const results = useMemo(() => {
     const s = query.trim().toLowerCase()
     if (!s) return []
@@ -24,7 +27,8 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
         const n = Number(num)
         return q.correct_fa_page === n || optionKeysOf(q).some((k) => distractorOf(q, k).fa_page === n)
       }
-      return q.concept_name.toLowerCase().includes(s) || q.concept_id.toLowerCase().includes(s)
+      return [q.concept_name, q.concept_id, q.stem, q.correct_explanation, q.high_yield_pearl,
+        q.option_A, q.option_B, q.option_C, q.option_D, q.option_E ?? ''].some((value) => value.toLowerCase().includes(s))
     })
   }, [query, questions])
 
@@ -34,7 +38,7 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
 
   return (
     <div className="space-y-9">
-      <header><p className={`${label} flex items-center gap-2`}><RotateCcw size={13} className="text-accent" /> Active recall / Review</p><h1 className="mt-2 text-[30px] font-bold tracking-[-.055em] sm:text-[36px]">Strengthen your weak spots<span className="text-accent">.</span></h1><p className="mt-1 text-[13px] text-muted">Turn missed questions into permanent knowledge.</p></header>
+      <header><p className={`${label} flex items-center gap-2`}><RotateCcw size={13} className="text-accent" /> Active recall / Review</p><h1 className="mt-2 font-display text-[38px] leading-tight tracking-[-.055em] sm:text-[49px]">Strengthen your weak spots<span className="text-accent">.</span></h1><p className="mt-1 text-[13px] text-muted">Turn missed questions into permanent knowledge.</p></header>
 
       <section className={`${card} overflow-hidden`}>
         <div className="grid grid-cols-3 divide-x divide-line">
@@ -46,8 +50,13 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
         </div>
       </section>
 
+      <section className={`${card} flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between`}>
+        <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><CalendarClock size={19}/></span><div><p className="text-[13px] font-semibold">Spaced repetition · Due today</p><p className="mt-1 text-xs text-muted">{due.length} concepts are ready for another recall session.</p></div></div>
+        <button disabled={!due.length} onClick={() => onStart(due.map((q) => q.id), 'Spaced Review', 'tutor')} className={btnPrimary}>Review {due.length} due <ArrowRight size={14}/></button>
+      </section>
+
       <section className="space-y-4">
-        <div><p className={label}>Library search</p><h2 className="mt-1.5 text-[22px] font-bold tracking-[-.04em]">Find a concept</h2><p className="mt-1 text-[12px] text-muted">Search by topic, concept ID, or First Aid page number.</p></div>
+        <div><p className={label}>Library search</p><h2 className="mt-1.5 text-[22px] font-bold tracking-[-.04em]">Find a concept</h2><p className="mt-1 text-[12px] text-muted">Search topics, question stems, answer explanations, or First Aid pages.</p></div>
         <div className="relative"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search concepts or page numbers…" className="surface-card h-13 w-full rounded-xl border border-line bg-surface pl-12 pr-12 text-[13px] text-ink outline-none transition-colors placeholder:text-muted focus:border-accent/50" />{query && <button onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-muted hover:bg-sunken"><X size={15} /></button>}</div>
 
         <AnimatePresence mode="wait">

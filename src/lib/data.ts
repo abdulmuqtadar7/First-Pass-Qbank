@@ -140,13 +140,40 @@ export interface BundledFile {
 
 export const BUNDLED_FILES: BundledFile[] = []
 
-const modules = import.meta.glob<unknown>('../data/*.json', { eager: true, import: 'default' })
+export const BASE_QUESTIONS: RawQuestion[] = []
+let loadPromise: Promise<RawQuestion[]> | undefined
 
-function loadBundled(): RawQuestion[] {
+interface PackedFile { name: string; raw: unknown }
+
+async function fetchPackedFiles(): Promise<PackedFile[]> {
+  const base = import.meta.env.BASE_URL
+  if (typeof DecompressionStream !== 'undefined') {
+    try {
+      const res = await fetch(`${base}firstpass-bank.fpb`, { cache: 'no-cache' })
+      if (!res.ok || !res.body) throw new Error(`Full question bank download failed (${res.status})`)
+      const unpacked = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).json()
+      if (unpacked && Array.isArray(unpacked.files)) return unpacked.files as PackedFile[]
+      throw new Error('Compressed bank has an invalid format')
+    } catch (error) {
+      console.warn('[FirstPass] Compressed bank unavailable; trying the compatibility file.', error)
+    }
+  }
+  const fallback = await fetch(`${base}firstpass-bank.json`, { cache: 'no-cache' })
+  if (!fallback.ok) throw new Error(`Full question bank download failed (${fallback.status})`)
+  const unpacked = await fallback.json()
+  if (!unpacked || !Array.isArray(unpacked.files)) throw new Error('Question bank has an invalid format')
+  return unpacked.files as PackedFile[]
+}
+
+async function readBundled(): Promise<RawQuestion[]> {
   const seen = new Set<string>()
   const out: RawQuestion[] = []
-  for (const path of Object.keys(modules).sort()) {
-    const { valid, errors, rejected } = validateQuestions(modules[path])
+  BUNDLED_FILES.length = 0
+  BASE_QUESTIONS.length = 0
+  // All systems arrive together in a compressed payload; nothing is deferred.
+  const files = await fetchPackedFiles()
+  for (const { name, raw } of files) {
+    const { valid, errors, rejected } = validateQuestions(raw)
     let added = 0
     for (const q of valid) {
       const id = makeId(q)
@@ -156,10 +183,17 @@ function loadBundled(): RawQuestion[] {
         added++
       }
     }
-    BUNDLED_FILES.push({ name: path.split('/').pop() ?? path, count: added, rejected })
-    if (errors.length) console.warn(`[FirstPass] ${path}: ${rejected} rejected`, errors)
+    BUNDLED_FILES.push({ name, count: added, rejected })
+    if (errors.length) console.warn(`[FirstPass] ${name}: ${rejected} rejected`, errors)
   }
-  return out
+  for (const q of out) BASE_QUESTIONS.push(q)
+  return BASE_QUESTIONS
 }
 
-export const BASE_QUESTIONS: RawQuestion[] = loadBundled()
+// One promise also prevents React StrictMode from loading twice in development.
+export function loadBundledQuestions(): Promise<RawQuestion[]> {
+  return (loadPromise ??= readBundled().catch((error: unknown) => {
+    loadPromise = undefined
+    throw error
+  }))
+}

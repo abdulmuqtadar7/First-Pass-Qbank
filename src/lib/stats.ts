@@ -70,7 +70,9 @@ export function conceptsMastered(qs: Question[], progress: Record<string, Progre
   let n = 0
   groups.forEach((list) => {
     const st = list.map((q) => progress[q.id]?.status)
-    if (st.every((s) => s === 'mastered' || s === 'skipped') && st.some((s) => s === 'mastered')) n++
+    // Coverage mode deliberately samples one angle per concept. A single
+    // confidently mastered representative secures that concept on the map.
+    if (st.some((s) => s === 'mastered')) n++
   })
   return n
 }

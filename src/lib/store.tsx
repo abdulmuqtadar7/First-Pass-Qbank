@@ -8,19 +8,16 @@ import {
   type ReactNode,
 } from 'react'
 import type { Confidence, PersistedState, Progress, Question, RawQuestion } from '../types/qbank'
-import { BASE_QUESTIONS, makeId, toQuestions, validateQuestions } from './data'
+import { loadBundledQuestions, makeId, toQuestions, validateQuestions } from './data'
 import { dateKey } from './stats'
 import { conceptKey } from './sessionBuilder'
+import { fieldKey } from './accountStorage'
 
-const STATE_KEY = 'fp:state:v1'
-const IMPORT_KEY = 'fp:imported:v1'
-const DAILY_KEY = 'fp:daily:v1'
-const UI_THEME_KEY = 'ui_theme'
 export const DAILY_GOAL = 20
 
 const blank = (): Progress => ({ attempts: 0, correct: 0, wrong: 0 })
 
-function loadState(): PersistedState {
+function loadState(userId: string): PersistedState {
   const fallback: PersistedState = {
     progress: {},
     flagged: [],
@@ -28,35 +25,38 @@ function loadState(): PersistedState {
     theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   }
   try {
-    const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null')
+    const s = JSON.parse(localStorage.getItem(fieldKey(userId, 'state')) || 'null')
     const persisted = s ? { ...fallback, ...s } : fallback
-    const uiTheme = localStorage.getItem(UI_THEME_KEY)
+    const uiTheme = localStorage.getItem(fieldKey(userId, 'theme'))
     return { ...persisted, theme: uiTheme === 'dark' || uiTheme === 'light' ? uiTheme : persisted.theme }
   } catch {
     return fallback
   }
 }
 
-function loadImported(): RawQuestion[] {
+function loadImported(userId: string): RawQuestion[] {
   try {
-    return validateQuestions(JSON.parse(localStorage.getItem(IMPORT_KEY) || '[]')).valid
+    return validateQuestions(JSON.parse(localStorage.getItem(fieldKey(userId, 'imported')) || '[]')).valid
   } catch {
     return []
   }
 }
 
-function loadDaily(): Record<string, number> {
+function loadDaily(userId: string): Record<string, number> {
   try {
-    return JSON.parse(localStorage.getItem(DAILY_KEY) || '{}')
+    return JSON.parse(localStorage.getItem(fieldKey(userId, 'daily')) || '{}')
   } catch {
     return {}
   }
 }
 
 interface Store {
+  bankStatus: 'loading' | 'ready' | 'error'
   questions: Question[]
   byId: Map<string, Question>
   state: PersistedState
+  imported: RawQuestion[]
+  daily: Record<string, number>
   importedCount: number
   todayCount: number
   dailyGoal: number
@@ -71,32 +71,48 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null)
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<PersistedState>(loadState)
-  const [imported, setImported] = useState<RawQuestion[]>(loadImported)
-  const [daily, setDaily] = useState<Record<string, number>>(loadDaily)
+export function StoreProvider({ children, userId }: { children: ReactNode; userId: string }) {
+  const [state, setState] = useState<PersistedState>(() => loadState(userId))
+  const [imported, setImported] = useState<RawQuestion[]>(() => loadImported(userId))
+  const [daily, setDaily] = useState<Record<string, number>>(() => loadDaily(userId))
+  const [baseQuestions, setBaseQuestions] = useState<RawQuestion[]>([])
+  const [bankStatus, setBankStatus] = useState<Store['bankStatus']>('loading')
+
+  useEffect(() => {
+    let current = true
+    loadBundledQuestions().then((loaded) => {
+      if (current) {
+        setBaseQuestions(loaded)
+        setBankStatus('ready')
+      }
+    }).catch((error: unknown) => {
+      console.error('[FirstPass] Question bank failed to load:', error)
+      if (current) setBankStatus('error')
+    })
+    return () => { current = false }
+  }, [])
 
   const questions = useMemo(() => {
     const map = new Map<string, Question>()
-    for (const q of toQuestions([...BASE_QUESTIONS, ...imported])) if (!map.has(q.id)) map.set(q.id, q)
+    for (const q of toQuestions([...baseQuestions, ...imported])) if (!map.has(q.id)) map.set(q.id, q)
     return [...map.values()]
-  }, [imported])
+  }, [baseQuestions, imported])
 
   const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions])
 
   useEffect(() => {
-    localStorage.setItem(STATE_KEY, JSON.stringify(state))
-    localStorage.setItem(UI_THEME_KEY, state.theme)
+    localStorage.setItem(fieldKey(userId, 'state'), JSON.stringify(state))
+    localStorage.setItem(fieldKey(userId, 'theme'), state.theme)
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
-  }, [state])
+  }, [state, userId])
 
   useEffect(() => {
-    localStorage.setItem(IMPORT_KEY, JSON.stringify(imported))
-  }, [imported])
+    localStorage.setItem(fieldKey(userId, 'imported'), JSON.stringify(imported))
+  }, [imported, userId])
 
   useEffect(() => {
-    localStorage.setItem(DAILY_KEY, JSON.stringify(daily))
-  }, [daily])
+    localStorage.setItem(fieldKey(userId, 'daily'), JSON.stringify(daily))
+  }, [daily, userId])
 
   const importQuestions = useCallback(
     (raw: RawQuestion[]) => {
@@ -182,9 +198,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value: Store = {
+    bankStatus,
     questions,
     byId,
     state,
+    imported,
+    daily,
     importedCount: imported.length,
     todayCount: daily[dateKey()] ?? 0,
     dailyGoal: DAILY_GOAL,
