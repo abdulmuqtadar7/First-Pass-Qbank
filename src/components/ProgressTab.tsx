@@ -1,34 +1,20 @@
 import { ArrowUpRight, BarChart3, CalendarDays, CheckCircle2, ChevronRight, Download, History, Moon, RotateCcw, Sun, Target, Upload } from 'lucide-react'
-import { motion } from 'motion/react'
-import { SYSTEMS } from '../lib/data'
 import { progressExport, useLearning } from '../lib/learning'
 import { navigate } from '../lib/nav'
-import { conceptsMastered, dateKey, summarize } from '../lib/stats'
+import { conceptsMastered, summarize } from '../lib/stats'
 import { useStore } from '../lib/store'
 import { card, label } from '../lib/ui'
 import { countConcepts } from '../lib/sessionBuilder'
 import { useAuth } from '../lib/auth'
 import AdaptivePanel from './AdaptivePanel'
+import PerformancePanel from './PerformancePanel'
 
 export default function ProgressTab({ onViewHistory }: { onViewHistory: () => void }) {
   const { user } = useAuth()
   const { questions, state, resetProgress, toggleTheme, todayCount } = useStore()
-  const { attempts, settings, setSettings, clearLearningProgress, schedule } = useLearning()
+  const { settings, setSettings, clearLearningProgress, schedule } = useLearning()
   const sum = summarize(questions, state.progress)
   const accuracy = sum.attempts ? Math.round((sum.correct / sum.attempts) * 100) : 0
-  const names = [...SYSTEMS]
-  for (const q of questions) if (!names.some((name) => name.toLowerCase() === q.system.toLowerCase())) names.push(q.system)
-  const active = names
-    .map((name) => ({ name, summary: summarize(questions.filter((q) => q.system.toLowerCase() === name.toLowerCase()), state.progress) }))
-    .filter((item) => item.summary.total > 0)
-  const days = Array.from({ length: 14 }, (_, index) => {
-    const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - 13 + index)
-    const day = dateKey(date)
-    const events = attempts.filter((a) => dateKey(new Date(a.at)) === day)
-    return { day, label: date.toLocaleDateString(undefined, { weekday: 'short' }), total: events.length, correct: events.filter((a) => a.correct).length }
-  })
-  const maxDay = Math.max(1, ...days.map((day) => day.total))
-  const averageTime = attempts.length ? Math.round(attempts.reduce((n, a) => n + a.seconds, 0) / attempts.length) : 0
   const dueNow = Object.values(schedule).filter((item) => item.dueAt <= Date.now()).length
   const daysUntilExam = settings.examDate ? Math.max(0, Math.ceil((new Date(`${settings.examDate}T12:00:00`).getTime() - Date.now()) / 86_400_000)) : null
 
@@ -64,34 +50,7 @@ export default function ProgressTab({ onViewHistory }: { onViewHistory: () => vo
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3"><div className={`${card} p-5`}><p className={label}>Confidence-secured concepts</p><p className="mt-3 font-display text-[36px] tabular-nums">{conceptsMastered(questions, state.progress)} <span className="font-sans text-[12px] text-muted">/ {countConcepts(questions)}</span></p></div><div className={`${card} p-5`}><p className={label}>Questions today</p><p className="mt-3 font-display text-[36px] tabular-nums">{todayCount} <span className="font-sans text-[12px] text-muted">/ {settings.dailyGoal}</span></p></div><div className={`${card} col-span-2 p-5 sm:col-span-1`}><p className={label}>Review ready</p><p className="mt-3 font-display text-[36px] tabular-nums">{dueNow} <span className="font-sans text-[12px] text-muted">concepts</span></p></div></section>
 
       <AdaptivePanel/>
-      <section className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        <div className={`${card} p-5 sm:p-6`}>
-          <div className="flex flex-wrap items-center justify-between gap-2"><div><p className={label}>Your rhythm</p><h2 className="mt-1 text-[18px] font-bold tracking-tight">Last 14 days</h2></div><span className="rounded-full bg-sunken px-2.5 py-1 font-mono text-[10px] text-muted">{attempts.length} tracked attempts</span></div>
-          <div className="mt-8 grid h-32 grid-cols-14 items-end gap-1.5 sm:gap-2" role="img" aria-label="Fourteen day study question volume chart">
-            {days.map((day) => <div key={day.day} className="flex h-full min-w-0 flex-col items-center justify-end gap-1.5" title={`${day.day}: ${day.total} attempted, ${day.correct} correct`}>
-              <div className="flex w-full flex-1 items-end"><motion.div initial={{ height: 0 }} whileInView={{ height: `${Math.max(4, (day.total / maxDay) * 100)}%` }} viewport={{ once: true }} className={`w-full rounded-t-md ${day.total ? 'bg-accent/80' : 'bg-sunken'}`} /></div>
-              <span className="hidden text-[9px] text-muted sm:block">{day.label.slice(0, 1)}</span>
-            </div>)}
-          </div>
-          <p className="mt-3 text-[11px] text-muted">New sessions are tracked here. Older progress remains in your overall statistics above.</p>
-        </div>
-        <div className={`${card} flex flex-col justify-between p-5 sm:p-6`}>
-          <div><p className={label}>Recall intelligence</p><h2 className="mt-1 text-[18px] font-bold tracking-tight">Your review outlook</h2></div>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-sunken p-4"><p className="text-[10px] text-muted">Concepts due</p><p className="mt-2 text-[30px] font-bold tabular-nums tracking-tight">{dueNow}</p></div>
-            <div className="rounded-xl bg-sunken p-4"><p className="text-[10px] text-muted">Avg. seconds / Q</p><p className="mt-2 text-[30px] font-bold tabular-nums tracking-tight">{averageTime || '—'}</p></div>
-          </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">Spacing intervals adapt when you rate an answer Again, Good or Easy.</p>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between"><div><p className={label}>By discipline</p><h2 className="mt-1.5 text-[22px] font-bold tracking-[-.04em]">System breakdown</h2></div><span className="font-mono text-[11px] text-muted">{active.length} active systems</span></div>
-        <div className={`${card} divide-y divide-line overflow-hidden`}>
-          {active.length === 0 && <p className="p-8 text-center text-[13px] text-muted">Start a study session to build your insights.</p>}
-          {active.map(({ name, summary }) => <div key={name} className="px-5 py-4 transition-colors hover:bg-sunken/40 sm:px-6"><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-semibold">{name}</span><span className="font-mono text-[11px] tabular-nums text-muted">{summary.mastered + summary.skipped} / {summary.total} <span className="px-1 opacity-50">·</span> {summary.pct}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken"><motion.div initial={{ width: 0 }} whileInView={{ width: `${summary.pct}%` }} viewport={{ once: true }} className="h-full rounded-full bg-accent" /></div></div>)}
-        </div>
-      </section>
+      <PerformancePanel />
 
       <section>
         <p className={`${label} mb-3`}>Workspace preferences</p>
