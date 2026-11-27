@@ -9,6 +9,9 @@ import { loadBundledQuestions } from '../lib/data'
 import { progressExport } from '../lib/learning'
 import { supabase } from '../lib/supabase'
 import AuthScreen from './AuthScreen'
+import ConnectivityGate, { useBrowserOnline } from './ConnectivityGate'
+import { readSyncBase, writeSyncBase } from '../lib/syncBase'
+import { mergeCloudSnapshots, sameSnapshotValue } from '../lib/cloudMerge'
 
 export interface AccountBoot {
   snapshot: AccountSnapshot
@@ -23,30 +26,42 @@ type Choice =
 export default function AccountGate({ children }: { children: (userId: string, boot: AccountBoot) => ReactNode }) {
   const { user, loading, recoveringPassword } = useAuth()
   const [boot, setBoot] = useState<AccountBoot | null>(null)
+  const [bootUser, setBootUser] = useState<string|null>(null)
   const [choice, setChoice] = useState<Choice | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const browserOnline = useBrowserOnline()
+  const [retryVersion, setRetryVersion] = useState(0)
 
   useEffect(() => {
-    setBoot(null); setChoice(null); setError('')
+    setBoot(null); setBootUser(null); setChoice(null); setError('')
     if (!user || !supabase) return
     const userId = user.id
     const client = supabase
     let canceled = false
+    const controller = new AbortController()
+    const deadline = window.setTimeout(()=>controller.abort(),15000)
     // Warm the exact existing full-bank loader during the small account fetch.
     void loadBundledQuestions().catch(() => {})
     async function initialize() {
       setBusy(true)
       try {
         const { data, error: dbError } = await client.from('user_qbank_state')
-          .select('snapshot, revision').eq('user_id', userId).maybeSingle()
+          .select('snapshot, revision').eq('user_id', userId).abortSignal(controller.signal).maybeSingle()
         if (canceled) return
         if (dbError) throw dbError
         if (data) {
           const cloud = decodeCloudSnapshot(data.snapshot)
           const local = readSnapshot(userId)
-          if (hasAccountCache(userId) && isPending(userId) && JSON.stringify(local) !== JSON.stringify(cloud)) {
-            setChoice({ kind: 'conflict', cloud, local, revision: Number(data.revision) })
+          if (hasAccountCache(userId) && isPending(userId) && !sameSnapshotValue(local, cloud)) {
+            const base = readSyncBase(userId)
+            const rev = Number(data.revision)
+            const merged = base && base.revision <= rev
+              ? base.revision === rev && sameSnapshotValue(base.snapshot, cloud) ? local : mergeCloudSnapshots(base.snapshot, local, cloud)
+              : null
+            if (merged) {
+              finalize(JSON.parse(JSON.stringify(merged)) as AccountSnapshot, rev, !sameSnapshotValue(merged, cloud), cloud)
+            } else setChoice({ kind: 'conflict', cloud, local, revision: rev })
           } else {
             finalize(cloud, Number(data.revision), false)
           }
@@ -59,13 +74,15 @@ export default function AccountGate({ children }: { children: (userId: string, b
         }
       } catch (err) {
         if (!canceled) setError(err instanceof Error ? err.message : 'Could not connect to your secure cloud account.')
-      } finally { if (!canceled) setBusy(false) }
+      } finally { window.clearTimeout(deadline); if (!canceled) setBusy(false) }
     }
-    function finalize(snapshot: AccountSnapshot, revision: number, pending: boolean) {
+    function finalize(snapshot: AccountSnapshot, revision: number, pending: boolean, common?: AccountSnapshot) {
       if (canceled) return
       try {
         saveSnapshot(userId, snapshot)
         setPending(userId, pending)
+        if (common || !pending) writeSyncBase(userId, revision, common ?? snapshot)
+        setBootUser(userId)
         setBoot({ snapshot, revision, pending })
         setChoice(null)
         setError('')
@@ -74,22 +91,37 @@ export default function AccountGate({ children }: { children: (userId: string, b
       }
     }
     void initialize()
-    return () => { canceled = true }
-  }, [user?.id])
+    return () => { canceled = true; window.clearTimeout(deadline); controller.abort() }
+  }, [user?.id, retryVersion])
+
+  // A loaded account is never unmounted because connectivity changed. Before
+  // boot, retry failed connection attempts automatically, including reconnect.
+  useEffect(() => {
+    if (boot || !user || choice || busy) return
+    const reconnect = () => setRetryVersion(v=>v+1)
+    window.addEventListener('online', reconnect)
+    const timer = error ? window.setInterval(() => { if(navigator.onLine)reconnect() }, 10000) : undefined
+    return () => { window.removeEventListener('online', reconnect); if(timer!==undefined)window.clearInterval(timer) }
+  }, [boot,user,choice,busy,error])
 
   const finishChoice = (snapshot: AccountSnapshot, revision: number, pending: boolean) => {
     if (!user) return
     try {
       saveSnapshot(user.id, snapshot)
       setPending(user.id, pending)
+      if (choice?.kind === 'conflict') writeSyncBase(user.id, revision, choice.cloud)
+      else if (!pending) writeSyncBase(user.id, revision, snapshot)
+      setBootUser(user.id)
       setBoot({ snapshot, revision, pending })
       setChoice(null)
     } catch { setError('Browser storage is unavailable. No progress has been deleted.') }
   }
 
+  if (!boot && !browserOnline) return <ConnectivityGate />
   if (loading) return <Loading text="Restoring your secure study account…" />
   if (!user || recoveringPassword) return <AuthScreen />
-  if (boot) return <>{children(user.id, boot)}</>
+  if (boot && bootUser === user.id) return <>{children(user.id, boot)}</>
+  if (error && !choice && !error.includes('storage')) return <ConnectivityGate retry={()=>setRetryVersion(v=>v+1)} />
 
   return <div className="flex min-h-dvh items-center justify-center bg-canvas px-5 py-12 text-ink">
     <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[600px] rounded-[30px] border border-line bg-surface p-6 shadow-[var(--shadow-float)] sm:p-10">

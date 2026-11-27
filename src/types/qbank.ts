@@ -68,6 +68,9 @@ export type SessionSource =
   | { kind: 'block'; config: BlockConfig }
 
 export interface Session {
+  /** Stable identity for newly selected sessions; old saved sessions remain readable. */
+  syncId?: string
+  selectedAt?: number
   ids: string[]
   title: string
   mode: SessionMode

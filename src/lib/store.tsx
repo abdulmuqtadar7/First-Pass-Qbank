@@ -12,7 +12,7 @@ import type { Confidence, PersistedState, Progress, Question, RawQuestion } from
 import { loadBundledQuestions, makeId, toQuestions, validateQuestions } from './data'
 import { dateKey } from './stats'
 import { conceptKey } from './sessionBuilder'
-import { fieldKey } from './accountStorage'
+import { fieldKey, type AccountSnapshot } from './accountStorage'
 import { EMPTY_BANK, mergeShared, readGlobalBank, type GlobalBank } from './globalBank'
 
 export const DAILY_GOAL = 20
@@ -71,6 +71,7 @@ interface Store {
   toggleFlag: (id: string) => void
   resetProgress: () => void
   toggleTheme: () => void
+  applyCloudMerge: (snapshot: AccountSnapshot) => void
 }
 
 const Ctx = createContext<Store | null>(null)
@@ -204,6 +205,10 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
     setState((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))
   }, [])
 
+  const applyCloudMerge = useCallback((snapshot: AccountSnapshot) => {
+    setState(snapshot.state); setImported(snapshot.imported); setDaily(snapshot.daily)
+  }, [])
+
   const value: Store = {
     bankStatus,
     questions,
@@ -223,6 +228,7 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
     toggleFlag,
     resetProgress,
     toggleTheme,
+    applyCloudMerge,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

@@ -17,6 +17,7 @@ export interface ReviewItem {
 }
 
 export interface AttemptEvent {
+  eventId?: string
   id: string
   at: number
   correct: boolean
@@ -107,9 +108,9 @@ function load(userId: string): LearningState {
 
 interface LearningContextValue extends LearningState {
   setActive: (snapshot: ActiveSession | null) => void
-  recordAttempt: (q: Question, correct: boolean, seconds: number, mode: SessionMode) => void
+  recordAttempt: (q: Question, correct: boolean, seconds: number, mode: SessionMode, eventId?: string) => void
   rateConcept: (q: Question, rating: Confidence) => void
-  recordHistory: (entry: Omit<HistoryEntry, 'id' | 'completedAt'>) => void
+  recordHistory: (entry: Omit<HistoryEntry, 'id' | 'completedAt'>, sessionId?: string) => void
   saveNote: (id: string, text: string) => void
   deleteNote: (id: string) => void
   toggleNotePin: (id: string) => void
@@ -122,6 +123,7 @@ interface LearningContextValue extends LearningState {
   markNoteRead: (id: string) => void
   setSettings: (settings: Partial<LearningSettings>) => void
   clearLearningProgress: () => void
+  applyCloudMerge: (snapshot: LearningState) => void
 }
 
 const Context = createContext<LearningContextValue | null>(null)
@@ -138,7 +140,7 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     setData((s) => ({ ...s, active: snapshot }))
   }, [])
 
-  const recordAttempt = useCallback((q: Question, correct: boolean, seconds: number, mode: SessionMode) => {
+  const recordAttempt = useCallback((q: Question, correct: boolean, seconds: number, mode: SessionMode, eventId?: string) => {
     const now = Date.now()
     setData((s) => {
       const key = conceptKey(q)
@@ -149,7 +151,7 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
       const repetitions = correct ? (spacedRecall || !prev?.repetitions ? (prev?.repetitions ?? 0) + 1 : prev.repetitions) : 0
       return {
         ...s,
-        attempts: [...s.attempts.slice(-14_999), { id: q.id, at: now, correct, seconds: Math.max(0, seconds), mode }],
+        attempts: [...s.attempts.slice(-14_999), { id: q.id, at: now, correct, seconds: Math.max(0, seconds), mode, ...(eventId ? { eventId } : {}) }],
         schedule: {
           ...s.schedule,
           [key]: { dueAt: now + intervalDays * DAY, intervalDays,
@@ -175,8 +177,9 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     })
   }, [])
 
-  const recordHistory = useCallback((entry: Omit<HistoryEntry, 'id' | 'completedAt'>) => {
-    setData((s) => ({ ...s, history: [{ ...entry, id: crypto.randomUUID(), completedAt: Date.now() }, ...s.history].slice(0, 120) }))
+  const recordHistory = useCallback((entry: Omit<HistoryEntry, 'id' | 'completedAt'>, sessionId?: string) => {
+    const id = sessionId ?? crypto.randomUUID()
+    setData((s) => s.history.some(h => h.id === id) ? s : ({ ...s, history: [{ ...entry, id, completedAt: Date.now() }, ...s.history].slice(0, 120) }))
   }, [])
 
   const saveNote = useCallback((id: string, value: string) => {
@@ -198,7 +201,7 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     setData((s) => {
       const note = s.notes[id]
       if (!note?.text.trim()) return s
-      return { ...s, notes: { ...s.notes, [id]: { ...note, pinned: !note.pinned } } }
+      return { ...s, notes: { ...s.notes, [id]: { ...note, pinned: !note.pinned, updatedAt: Date.now() } } }
     })
   }, [])
 
@@ -262,9 +265,11 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     setData((s) => ({ ...s, schedule: {}, attempts: [], history: [], active: null, flashcards: [], settings: {...s.settings, plannerActivity: {}} }))
   }, [])
 
+  const applyCloudMerge = useCallback((snapshot: LearningState) => setData(snapshot), [])
+
   const value = useMemo(() => ({ ...data, setActive, recordAttempt, rateConcept,
-    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress }),
-  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress])
+    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress, applyCloudMerge }),
+  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress, applyCloudMerge])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

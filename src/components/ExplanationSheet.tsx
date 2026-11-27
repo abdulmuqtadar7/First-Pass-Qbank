@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { distractorOf, optionKeysOf, optionText } from '../lib/options'
 import { card, label, tag } from '../lib/ui'
 import { useLearning } from '../lib/learning'
+import { useCloudSync } from '../lib/cloudSync'
 import type { Answer, Question, SessionMode } from '../types/qbank'
 import TopicSummary from './TopicSummary'
 import NoteEditor from './NoteEditor'
@@ -24,6 +25,7 @@ const TABS: { key: ExplanationTab; name: string; Icon: typeof BookOpen }[] = [
 ]
 
 export default function ExplanationSheet({ q, ans, mode, isCorrectPick }: Props) {
+  const { connection } = useCloudSync()
   const [tab, setTab] = useState<ExplanationTab>('mechanism')
   const [noteOpen, setNoteOpen] = useState(false)
   const { notes, saveNote, flashcards, addFlashcard } = useLearning()
@@ -88,12 +90,12 @@ export default function ExplanationSheet({ q, ans, mode, isCorrectPick }: Props)
         </motion.div>
       </AnimatePresence>
       <div className="flex flex-wrap items-center gap-2 border-t border-line bg-sunken/35 px-5 py-3">
-        <button onClick={() => setNoteOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><NotebookPen size={13}/> Personal note</button>
-        <button onClick={captureHighlight} title="Select a passage above, then save it to your note" className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><Highlighter size={13}/> Save selection</button>
-        <button onClick={() => addFlashcard(q)} disabled={saved} className="inline-flex items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent disabled:opacity-55"><Plus size={13}/>{saved ? 'Flashcard saved' : 'Make flashcard'}</button>
+        <button disabled={connection!=='online'} onClick={() => setNoteOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><NotebookPen size={13}/> Personal note</button>
+        <button disabled={connection!=='online'} onClick={captureHighlight} title="Select a passage above, then save it to your note" className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[11px] font-semibold text-muted hover:text-accent"><Highlighter size={13}/> Save selection</button>
+        <button onClick={() => addFlashcard(q)} disabled={saved||connection!=='online'} className="inline-flex items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent disabled:opacity-55"><Plus size={13}/>{saved ? 'Flashcard saved' : 'Make flashcard'}</button>
         <span className="ml-auto hidden items-center gap-1 text-[10px] text-muted sm:flex">Scroll to explore <ChevronDown size={12}/></span>
       </div>
-      {noteOpen && <div className="border-t border-line p-5"><NoteEditor q={q} /></div>}
+      {noteOpen && <fieldset disabled={connection!=='online'} className="border-0 p-0"><div className="border-t border-line p-5"><NoteEditor q={q} /></div></fieldset>}
     </motion.section>
   )
 }

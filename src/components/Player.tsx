@@ -14,6 +14,7 @@ import BlockReport from './BlockReport'
 import ExplanationSheet from './ExplanationSheet'
 import QuestionReport from './QuestionReport'
 import NoteEditor from './NoteEditor'
+import { useCloudSync } from '../lib/cloudSync'
 
 interface Props {
   session: Session
@@ -71,6 +72,7 @@ const fmt = (s: number) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`
 export default function Player({ session, onExit, onReview, onRestart }: Props) {
   const { byId, state, recordAnswer, setConfidence, toggleFlag } = useStore()
   const { active, setActive, recordAttempt, rateConcept, recordHistory } = useLearning()
+  const { connection, setPlayerOpen } = useCloudSync()
   const mode = session.mode
   const restored = active?.session.title === session.title && active.session.mode === session.mode
     && active.session.ids.join('|') === session.ids.join('|') ? active : null
@@ -138,6 +140,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }
 
   function restartSession() {
+    if (connection !== 'online' || !navigator.onLine) { window.alert('Please check your internet connection before starting a new session.'); return }
     if (answeredCount > 0 && !window.confirm(session.source?.kind === 'adaptive' ? 'Rebuild your adaptive queue? Recorded progress stays intact.' : 'Start a new random session? This clears current session answers, but preserves saved progress.')) return
     onRestart()
   }
@@ -205,7 +208,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         if (a?.selected && qq) {
           const correct = a.selected === qq.correct_option
           recordAnswer(id, correct)
-          recordAttempt(qq, correct, times.current[id] ?? 0, mode)
+          recordAttempt(qq, correct, times.current[id] ?? 0, mode, session.syncId ? `${session.syncId}:${id}` : undefined)
         }
       }
     }
@@ -220,10 +223,11 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
       }
       recordHistory({ title: session.title, mode, ids: [...queue], selections,
         times: { ...times.current }, elapsed: examElapsed,
-        correct, answered, ...(mockConfig ? { mock: mockConfig } : {}) })
+        correct, answered, ...(mockConfig ? { mock: mockConfig } : {}) }, session.syncId)
     }
     setActive(null)
     setDone(true)
+    setPlayerOpen(false)
   }
 
   function advanceMock(automatic = false) {
@@ -266,7 +270,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     if (mode === 'tutor') {
       const correct = k === q.correct_option
       recordAnswer(q.id, correct)
-      recordAttempt(q, correct, times.current[q.id] ?? 0, mode)
+      recordAttempt(q, correct, times.current[q.id] ?? 0, mode, session.syncId ? `${session.syncId}:${q.id}` : undefined)
     }
   }
 
@@ -490,7 +494,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
               </span>
             </div>
             <p className="fp-player-stem max-w-[76ch] px-5 py-7 font-reading text-[17px] leading-[1.9] tracking-[-.005em] sm:px-7 sm:py-9 sm:text-[18px]">{q.stem}</p>
-            <QuestionReport key={q.id} q={q} />
+            {connection === 'online' && <QuestionReport key={q.id} q={q} />}
           </article>
 
           <div className="fp-player-options space-y-2.5" role="group" aria-label="Answer options">
@@ -537,7 +541,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
             })}
           </div>
 
-          {mode === 'tutor' && !reveal && <details className={`${card} p-4`}>
+          {connection === 'online' && mode === 'tutor' && !reveal && <details className={`${card} p-4`}>
             <summary className="cursor-pointer text-sm font-semibold text-accent">Personal note</summary>
             <div className="mt-3"><NoteEditor q={q} /></div>
           </details>}

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import './desktopWorkspace.css'
 import { readDesktopDensity, readDesktopSidebar, writeDesktopPreference, type DesktopDensity } from './lib/desktopPreferences'
 import { AnimatePresence, motion } from 'motion/react'
@@ -16,6 +16,7 @@ import { useStore } from './lib/store'
 import { page } from './lib/ui'
 import { fieldKey } from './lib/accountStorage'
 import { useCloudSync } from './lib/cloudSync'
+import ConnectivityGate from './components/ConnectivityGate'
 import type { OptionKey, Session, SessionMode, SessionSource } from './types/qbank'
 
 // Keep the initial bundle focused on authentication and the workspace shell.
@@ -53,7 +54,7 @@ function DeferredScreen({ children }: { children: ReactNode }) {
 }
 
 export default function App({ userId }: { userId: string }) {
-  const { notifyChanged } = useCloudSync()
+  const { notifyChanged, connection, retry, setPlayerOpen, cloudVersion } = useCloudSync()
   const { questions, state, bankStatus } = useStore()
   const { active, setActive, schedule, attempts } = useLearning()
   const [path, setPath] = useState(window.location.pathname)
@@ -65,8 +66,10 @@ export default function App({ userId }: { userId: string }) {
   // Open the dashboard first, so students can explicitly resume or choose a new block.
   const [session, setSession] = useState<Session | null>(null)
   const [sKey, setSKey] = useState(0)
+  useLayoutEffect(() => { setPlayerOpen(!!session); return () => setPlayerOpen(false) }, [session, setPlayerOpen])
   const [avatar, setAvatar] = useState<DoctorAvatar | null>(() => readAvatar(userId))
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(() => !readAvatar(userId))
+  useEffect(() => { setAvatar(readAvatar(userId)); setAvatarPickerOpen(!readAvatar(userId)) }, [cloudVersion, userId])
 
   const chooseAvatar = useCallback((choice: DoctorAvatar) => {
     setAvatar(choice)
@@ -82,25 +85,25 @@ export default function App({ userId }: { userId: string }) {
   }, [])
 
   const start = useCallback((ids: string[], title: string, mode: SessionMode = 'tutor', source?: SessionSource) => {
-    if (!ids.length) return
+    if (connection !== 'online' || !navigator.onLine || !ids.length) return
     if (active && !window.confirm('Replace the saved unfinished session with a new one? Your recorded question progress will stay intact.')) return
-    const next: Session = { ids: source?.kind === 'adaptive' ? ids : shuffle(ids), title, mode, source }
+    const next: Session = { syncId: crypto.randomUUID(), selectedAt: Date.now(), ids: source?.kind === 'adaptive' ? ids : shuffle(ids), title, mode, source }
     setSession(next)
     setActive({ session: next, queue: next.ids, position: 0, answers: {}, ratings: {}, times: {}, startedAt: Date.now(), updatedAt: Date.now() })
     setSKey((k) => k + 1)
-  }, [active, setActive])
+  }, [active, setActive, connection])
 
   const review = useCallback((ids: string[], prefill: Record<string, OptionKey>) => {
-    if (!ids.length) return
+    if (connection !== 'online' || !navigator.onLine || !ids.length) return
     if (active && !window.confirm('Open this review and discard your saved unfinished session? Your recorded question progress will remain.')) return
     const next: Session = { ids: shuffle(ids), title: 'Review', mode: 'review', prefill }
     setActive(null)
     setSession(next)
     setSKey((k) => k + 1)
-  }, [active, setActive])
+  }, [active, setActive, connection])
 
   const restart = useCallback(() => {
-    if (!session) return
+    if (!session || connection !== 'online' || !navigator.onLine) return
     let ids = session.ids
     if (session.source?.kind === 'system') {
       const { system, coverageMode } = session.source
@@ -117,14 +120,14 @@ export default function App({ userId }: { userId: string }) {
       if (!ids.length) { window.alert('Not enough distinct concepts for this mock. Choose a smaller exam.'); return }
     }
     if (!ids.length) ids = session.ids
-    const next: Session = { ...session, ids: session.source?.kind === 'adaptive' ? ids : shuffle(ids) }
+    const next: Session = { ...session, syncId: crypto.randomUUID(), selectedAt: Date.now(), ids: session.source?.kind === 'adaptive' ? ids : shuffle(ids) }
     setSession(next)
     setActive(session.mode === 'review' ? null : { session: next, queue: next.ids, position: 0, answers: {}, ratings: {}, times: {}, startedAt: Date.now(), updatedAt: Date.now() })
     setSKey((k) => k + 1)
-  }, [questions, session, state, schedule, attempts, setActive])
+  }, [questions, session, state, schedule, attempts, setActive, connection])
 
   const resume = useCallback(() => {
-    if (!active) return
+    if (!active || connection !== 'online' || !navigator.onLine) return
     const available = new Set(questions.map(q => q.id))
     if (!active.queue.length || active.queue.some(id => !available.has(id))) {
       window.alert("This saved session contains questions that are no longer available. Your recorded progress is safe. You can start a new block or try again after restoring the question bank.")
@@ -132,7 +135,7 @@ export default function App({ userId }: { userId: string }) {
     }
     setSession(active.session)
     setSKey((k) => k + 1)
-  }, [active, questions])
+  }, [active, questions, connection])
 
   useEffect(() => { if (!path.startsWith('/admin') && bankStatus === 'loading') void loadStudyTab().catch(() => {}) }, [path, bankStatus])
 
@@ -148,7 +151,10 @@ export default function App({ userId }: { userId: string }) {
 
   const group = tab === 'practice' || tab === 'exams' ? 'study' : tab === 'notebook' || tab === 'flashcards' || tab === 'review' ? 'library' : tab === 'progress' || tab === 'history' ? 'progress' : null
 
-  if (path.startsWith('/admin')) return <DeferredScreen><OwnerDashboard /></DeferredScreen>
+  const restricted = connection !== 'online'
+  if (!session && restricted && (bankStatus !== 'ready' || path.startsWith('/admin'))) return <ConnectivityGate checking={connection === 'checking'} retry={retry} />
+
+  if (path.startsWith('/admin') && !session) return <DeferredScreen><OwnerDashboard /></DeferredScreen>
 
   // Never mount a restored player against an empty, still-loading question map.
   if (bankStatus !== 'ready') return (
@@ -167,11 +173,12 @@ export default function App({ userId }: { userId: string }) {
   )
 
   if (session) {
-    return <div className="fp-desktop-player" data-density={density}><DeferredScreen key={sKey}><Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} /></DeferredScreen></div>
+    return <div className="fp-desktop-player" data-density={density}>{restricted && <aside role="status" className="fixed right-3 top-16 z-[80] max-w-[min(360px,calc(100vw-24px))] rounded-xl border border-line bg-surface p-2.5 text-xs text-ink shadow-lg pointer-events-none"><strong>{connection==='checking'?'Checking connectivity…':"You're offline — continue this session"}</strong><p className="mt-1 text-muted">Progress is stored on this device and will sync automatically when online.</p></aside>}<DeferredScreen key={sKey}><Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} /></DeferredScreen></div>
   }
 
   return (
-    <div className={`${page} study-shell journey-app fp-workspace`} data-density={density} data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}>
+    <>
+    <div inert={restricted} aria-hidden={restricted || undefined} className={`${page} study-shell journey-app fp-workspace`} data-density={density} data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}>
       <AppNav tab={tab} onChange={setTab} reviewCount={due} avatar={avatar} onPickAvatar={() => setAvatarPickerOpen(true)} density={density} onDensity={changeDensity} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
       <AnimatePresence mode="wait" initial={false}>
         <motion.main
@@ -200,5 +207,7 @@ export default function App({ userId }: { userId: string }) {
       </AnimatePresence>
       <AvatarPicker open={avatarPickerOpen} selected={avatar} onChoose={chooseAvatar} onClose={() => setAvatarPickerOpen(false)} />
     </div>
+    {restricted && <div className="fixed inset-0 z-[200] overflow-auto bg-canvas"><ConnectivityGate checking={connection === 'checking'} retry={retry} /></div>}
+    </>
   )
 }
