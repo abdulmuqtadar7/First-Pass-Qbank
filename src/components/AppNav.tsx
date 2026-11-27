@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { useAuth } from '../lib/auth'
+import { useOwnerAccess } from '../lib/ownerAccess'
+import { navigate } from '../lib/nav'
 import { CloudSyncIndicator, useCloudSync } from '../lib/cloudSync'
 import type { DoctorAvatar } from './DoctorWalk'
 
@@ -27,6 +29,7 @@ export default function AppNav({ tab, onChange, reviewCount, avatar, onPickAvata
   const { user, signOut } = useAuth()
   const { status } = useCloudSync()
   const [accountOpen, setAccountOpen] = useState(false)
+  const ownerAccess = useOwnerAccess(accountOpen)
   const dark = state.theme === 'dark'
 
   return <>
@@ -56,7 +59,7 @@ export default function AppNav({ tab, onChange, reviewCount, avatar, onPickAvata
           </button>
           <div className="relative">
             <button onClick={() => setAccountOpen((v) => !v)} title="Your account" aria-expanded={accountOpen} aria-label="Account settings" className="grid h-10 w-10 place-items-center rounded-full border border-white/80 bg-surface/75 text-[#41366e] shadow-sm transition hover:bg-surface dark:border-[#342c43] dark:text-[#d8c5ff]"><span className="text-xs font-extrabold">{user?.email?.slice(0, 1).toUpperCase() ?? '?'}</span></button>
-            {accountOpen && <div className="absolute right-0 top-12 z-[90] w-[min(290px,80vw)] rounded-2xl border border-line bg-surface p-3 shadow-[var(--shadow-float)]"><p className="px-2 pt-1 text-[10px] font-extrabold uppercase tracking-widest text-muted">Signed in as</p><p className="truncate px-2 py-2 text-xs font-semibold" title={user?.email}>{user?.email}</p><p className="mb-2 px-2 text-[10px] text-muted">Progress is private to your account.</p><button onClick={async () => { if (status !== 'saved' && !window.confirm('Some progress may not be synced yet. Your local copy will remain on this device. Sign out?')) return; setAccountOpen(false); try { await signOut() } catch (error) { window.alert(error instanceof Error ? error.message : 'Could not sign out.') } }} className="flex w-full items-center gap-2 rounded-xl bg-sunken px-3 py-3 text-left text-xs font-semibold hover:text-bad"><LogOut size={16}/> Sign out</button></div>}
+            {accountOpen && <div className="absolute right-0 top-12 z-[90] w-[min(290px,80vw)] rounded-2xl border border-line bg-surface p-3 shadow-[var(--shadow-float)]"><p className="px-2 pt-1 text-[10px] font-extrabold uppercase tracking-widest text-muted">Signed in as</p><p className="truncate px-2 py-2 text-xs font-semibold" title={user?.email}>{user?.email}</p><p className="mb-2 px-2 text-[10px] text-muted">Progress is private to your account.</p>{ownerAccess === 'owner' && <button type="button" onClick={() => { setAccountOpen(false); navigate('/admin') }} className="mb-2 flex w-full items-center gap-2 rounded-xl bg-accent/10 px-3 py-3 text-left text-xs font-bold text-accent">Owner dashboard</button>}<button onClick={async () => { if (status !== 'saved' && !window.confirm('Some progress may not be synced yet. Your local copy will remain on this device. Sign out?')) return; setAccountOpen(false); try { await signOut() } catch (error) { window.alert(error instanceof Error ? error.message : 'Could not sign out.') } }} className="flex w-full items-center gap-2 rounded-xl bg-sunken px-3 py-3 text-left text-xs font-semibold hover:text-bad"><LogOut size={16}/> Sign out</button></div>}
           </div>
         </div>
       </div>

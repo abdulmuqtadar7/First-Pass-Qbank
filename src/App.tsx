@@ -9,7 +9,7 @@ import NotebookTab from './components/NotebookTab'
 import AvatarPicker from './components/AvatarPicker'
 import { readAvatar, type DoctorAvatar } from './components/DoctorWalk'
 import Player from './components/Player'
-import Admin from './components/Admin'
+import OwnerDashboard from './components/OwnerDashboard'
 import { buildBlock, shuffle } from './lib/blocks'
 import { buildSystemSession } from './lib/sessionBuilder'
 import { weakQuestions } from './lib/stats'
@@ -92,7 +92,7 @@ export default function App({ userId }: { userId: string }) {
     [questions, schedule, state.progress, state.flagged],
   )
 
-  if (path.startsWith('/admin')) return <Admin />
+  if (path.startsWith('/admin')) return <OwnerDashboard />
 
   // Never mount a restored player against an empty, still-loading question map.
   if (bankStatus !== 'ready') return (

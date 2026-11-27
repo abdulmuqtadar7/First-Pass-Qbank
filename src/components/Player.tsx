@@ -10,6 +10,7 @@ import { btnGhost, btnPrimary, card, iconBtn, label, tag } from '../lib/ui'
 import type { Answer, Confidence, OptionKey, Session } from '../types/qbank'
 import BlockReport from './BlockReport'
 import ExplanationSheet from './ExplanationSheet'
+import QuestionReport from './QuestionReport'
 
 interface Props {
   session: Session
@@ -436,6 +437,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
               </span>
             </div>
             <p className="max-w-[76ch] px-5 py-7 font-reading text-[17px] leading-[1.9] tracking-[-.005em] sm:px-7 sm:py-9 sm:text-[18px]">{q.stem}</p>
+            <QuestionReport key={q.id} q={q} />
           </article>
 
           <div className="space-y-2.5" role="group" aria-label="Answer options">
