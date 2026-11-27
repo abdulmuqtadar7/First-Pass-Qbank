@@ -2,6 +2,7 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, Flag, Flame, RotateCcw, Sh
 import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { initialMockState, mockRange, mockRemaining, mockExamElapsed, nextMockPhase } from '../lib/mockExam'
 import { fisherYates } from '../lib/sessionBuilder'
 import { useLearning } from '../lib/learning'
 import { computeStreak } from '../lib/stats'
@@ -87,6 +88,9 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     return init
   })
   const [ratings, setRatings] = useState<Record<string, Confidence>>(restored?.ratings ?? {})
+  const mockConfig = session.source?.kind === 'mock' ? session.source.config : undefined
+  const [mock, setMock] = useState(() => restored?.mock ?? initialMockState())
+  const [finalElapsed, setFinalElapsed] = useState(0)
   const [strikeMode, setStrikeMode] = useState(false)
   const [done, setDone] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -103,7 +107,10 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   const q = byId.get(queue[pos])
   curId.current = q?.id ?? ''
   const limit = total * (session.source?.kind === 'block' ? session.source.config.secondsPerQuestion ?? 90 : 90)
-  const remaining = Math.max(0, limit - Math.floor((now - startedAt.current) / 1000))
+  const elapsedNow = Math.max(0, Math.floor((now - startedAt.current) / 1000))
+  const range = mockConfig ? mockRange(total, mock.block) : { start: 0, end: total, count: 1 }
+  const onBreak = !!mockConfig && mock.phase === 'break'
+  const remaining = mockConfig && total > 0 ? mockRemaining(mockConfig, total, mock, elapsedNow) : Math.max(0, limit - elapsedNow)
   const ans: Answer = (q && answers[q.id]) || EMPTY
   const coverageMode = session.source?.kind === 'system' ? session.source.coverageMode : session.source?.kind === 'block' ? session.source.config.coverageMode : undefined
   const locked = mode === 'review' || (mode === 'tutor' && ans.selected !== null)
@@ -113,7 +120,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   const streak = computeStreak(state.studyDates)
 
   function shuffleRemaining() {
-    if (unansweredAhead < 2) return
+    if (mockConfig || unansweredAhead < 2) return
     setQueue((previous) => {
       const slots: number[] = []
       const pending: string[] = []
@@ -139,18 +146,18 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     if (done) return
     const t = window.setInterval(() => {
       setNow(Date.now())
-      if (curId.current) times.current[curId.current] = (times.current[curId.current] ?? 0) + 1
+      if (!onBreak && curId.current) times.current[curId.current] = (times.current[curId.current] ?? 0) + 1
     }, 1000)
     return () => window.clearInterval(t)
-  }, [done])
+  }, [done, onBreak])
 
   const saveSession = useCallback(() => {
     if (done || mode === 'review' || submitted.current || leaving.current || !queue.length) return
     setActive({
       session, queue, position: pos, answers, ratings, times: { ...times.current },
-      startedAt: startedAt.current, updatedAt: Date.now(),
+      startedAt: startedAt.current, updatedAt: Date.now(), ...(mockConfig ? { mock } : {}),
     })
-  }, [session, queue, pos, answers, ratings, mode, done, setActive])
+  }, [session, queue, pos, answers, ratings, mode, done, setActive, mockConfig, mock])
 
   // Checkpoint each committed interaction before the next paint.
   useLayoutEffect(() => { saveSession() }, [saveSession])
@@ -188,6 +195,9 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   function submit() {
     if (submitted.current || leaving.current) return
     submitted.current = true
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedAt.current) / 1000))
+    const examElapsed = mockConfig ? mockExamElapsed(mockConfig, total, mock, elapsed) : elapsed
+    setFinalElapsed(examElapsed)
     if (mode === 'exam') {
       for (const id of queue) {
         const a = answers[id]
@@ -209,11 +219,23 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         if (selected && selected === byId.get(id)?.correct_option) correct++
       }
       recordHistory({ title: session.title, mode, ids: [...queue], selections,
-        times: { ...times.current }, elapsed: Math.floor((Date.now() - startedAt.current) / 1000),
-        correct, answered })
+        times: { ...times.current }, elapsed: examElapsed,
+        correct, answered, ...(mockConfig ? { mock: mockConfig } : {}) })
     }
     setActive(null)
     setDone(true)
+  }
+
+  function advanceMock(automatic = false) {
+    if (!mockConfig || submitted.current || leaving.current || done) return
+    if (!automatic && !onBreak && !window.confirm(range.end === total ? 'Submit this examination and grade all questions? Unanswered questions will count as incorrect.' : 'Finish this block? You cannot return to it until the examination is graded.')) return
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedAt.current) / 1000))
+    const next = nextMockPhase(mockConfig, total, mock, elapsed)
+    if (!next) { submit(); return }
+    setMock(next)
+    setStrikeMode(false)
+    if (next.phase === 'block') setPos(mockRange(total, next.block).start)
+    setNow(Date.now())
   }
 
   function finish() {
@@ -223,7 +245,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
 
   function go(delta: number) {
     const np = pos + delta
-    if (np < 0) return
+    if (np < range.start || (mockConfig && np >= range.end) || onBreak) return
     if (np >= total) {
       if (mode !== 'exam') finish()
       return
@@ -233,7 +255,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }
 
   function choose(k: OptionKey) {
-    if (!q || locked || leaving.current || submitted.current) return
+    if (!q || locked || leaving.current || submitted.current || onBreak || (mockConfig && mockRemaining(mockConfig, total, mock, Math.floor((Date.now() - startedAt.current) / 1000)) <= 0)) return
     if (mode === 'tutor') {
       // Prevent repeated input before React commits the first selected answer.
       if (tutorSelections.current.has(q.id)) return
@@ -270,7 +292,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }
 
   useEffect(() => {
-    if (mode === 'exam' && !done && total > 0 && remaining <= 0) submit()
+    if (mode === 'exam' && !done && total > 0 && remaining <= 0) { if (mockConfig) advanceMock(true); else submit() }
   })
 
   useEffect(() => {
@@ -281,7 +303,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }, [pos, state.progress, coverageMode, session.source])
 
   useEffect(() => {
-    if (done) return
+    if (done || onBreak) return
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return
@@ -352,13 +374,16 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         answers={answers}
         times={times.current}
         mode={mode}
-        elapsed={Math.floor((Date.now() - startedAt.current) / 1000)}
+        elapsed={finalElapsed}
+        isMock={!!mockConfig}
         onReview={onReview}
         onRestart={onRestart}
         onExit={onExit}
       />
     )
   }
+
+  if (onBreak) return <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-canvas p-5 text-ink"><section className={`${card} w-full max-w-md space-y-5 p-7 text-center`}><p className={label}>Mock examination · scheduled break</p><h1 className="text-2xl font-bold">Block {mock.block + 1} complete</h1><p className="text-sm text-muted">Answers are locked. The next block begins when the break ends, or you can continue now.</p><p className="font-mono text-5xl font-bold text-accent tabular-nums">{fmt(remaining)}</p><button className={`${btnPrimary} w-full`} onClick={() => advanceMock()}>Start next block</button><button className={btnGhost} onClick={saveAndExit}>Save &amp; exit</button></section></div>
 
   const keys = optionKeysOf(q)
   const flagged = state.flagged.includes(q.id)
@@ -381,7 +406,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
           <button onClick={saveAndExit} aria-label={mode === 'review' ? 'Exit review' : 'Save and exit'} title={mode === 'exam' ? 'Save and exit (timer pauses when saved)' : 'Save and exit'} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-sunken px-2.5 py-2 text-xs font-semibold text-muted hover:text-ink">
             <ArrowLeft size={18} /><span className="hidden sm:inline">{mode === 'review' ? 'Exit' : 'Save & exit'}</span>
           </button>
-          <div className="min-w-0 flex-1 pl-1 sm:pl-3"><p className="truncate text-[12px] font-semibold tracking-tight">{session.title}</p><p className="mt-0.5 truncate font-mono text-[10px] text-muted">Question {pad(pos + 1)} <span className="text-muted/50">/</span> {pad(total)} <span className="px-1 text-muted/40">·</span> {mode === 'exam' ? q.system : q.concept_name}</p></div>
+          <div className="min-w-0 flex-1 pl-1 sm:pl-3"><p className="truncate text-[12px] font-semibold tracking-tight">{session.title}</p><p className="mt-0.5 truncate font-mono text-[10px] text-muted">Question {pad(pos + 1)} <span className="text-muted/50">/</span> {pad(total)} <span className="px-1 text-muted/40">·</span> {mockConfig ? `Block ${mock.block + 1}/${range.count}` : mode === 'exam' ? q.system : q.concept_name}</p></div>
           <span title="Daily study streak" className="hidden items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 py-1.5 text-[11px] font-semibold text-muted sm:inline-flex"><Flame size={13} className="text-orange-500" /> {streak}d</span>
           {mode === 'exam' && (
             <span className={`rounded-lg border px-2.5 py-2 font-mono text-[11px] font-semibold tabular-nums ${timerCls}`}>
@@ -399,13 +424,13 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         </div>
         <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 pb-3 sm:px-5">
           <span className="mr-auto inline-flex min-w-0 items-center truncate rounded-lg border border-accent/15 bg-accent/8 px-2.5 py-1.5 text-[10px] font-semibold text-accent">
-            {session.source?.kind === 'adaptive' ? 'Adaptive practice · 1 per concept' : coverageMode === 'core_concepts' ? 'Complete Coverage · 1 per concept' : coverageMode === 'all' ? 'Full Bank · All angles' : mode === 'review' ? 'Review session' : 'Practice drill'}
+            {mockConfig ? `Mock · Block ${mock.block + 1} of ${range.count}` : session.source?.kind === 'adaptive' ? 'Adaptive practice · 1 per concept' : coverageMode === 'core_concepts' ? 'Complete Coverage · 1 per concept' : coverageMode === 'all' ? 'Full Bank · All angles' : mode === 'review' ? 'Review session' : 'Practice drill'}
           </span>
           <button type="button" aria-pressed={strikeMode} onClick={() => setStrikeMode((value) => !value)} title="Toggle strike mode (S)" disabled={locked} className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-35 ${strikeMode ? 'border-accent/40 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}><Strikethrough size={14} /><span className="hidden sm:inline">Strike mode</span><span className="sm:hidden">S</span></button>
           <button
             type="button"
             onClick={shuffleRemaining}
-            disabled={unansweredAhead < 2}
+            disabled={!!mockConfig || unansweredAhead < 2}
             aria-label="Shuffle Remaining"
             title="Shuffle remaining unanswered questions; keep this and answered questions in place"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-35"
@@ -415,6 +440,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
           <button
             type="button"
             onClick={restartSession}
+            disabled={!!mockConfig}
             title="Restart with a new random question queue and fresh concept representatives"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink"
           >
@@ -423,6 +449,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         </div>
         <div ref={strip} aria-label="Question navigator" className="no-scrollbar mx-auto flex max-w-4xl gap-1.5 overflow-x-auto px-3 pb-3 sm:px-5">
           {queue.map((id, i) => {
+            if (i < range.start || i >= range.end) return null
             const a = answers[id]
             const qq = byId.get(id)
             let cls = 'text-muted hover:bg-sunken'
@@ -526,7 +553,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
 
       <footer className="border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-36px_rgba(0,0,0,.4)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 py-3 sm:px-5">
-          <button onClick={() => go(-1)} disabled={pos === 0} aria-label="Previous question" className={`${iconBtn} border border-line bg-sunken`}>
+          <button onClick={() => go(-1)} disabled={pos === range.start} aria-label="Previous question" className={`${iconBtn} border border-line bg-sunken`}>
             <ChevronLeft size={18} />
           </button>
 
@@ -535,8 +562,8 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
               <span className="hidden font-mono text-xs tabular-nums text-muted sm:block">
                 {answeredCount}/{total} answered
               </span>
-              <button onClick={submit} className={`${btnPrimary} flex-1`}>
-                End &amp; Grade Block
+              <button onClick={() => mockConfig ? advanceMock() : submit()} className={`${btnPrimary} flex-1`}>
+                {mockConfig ? (range.end === total ? 'Submit mock exam' : 'Finish block') : 'End & Grade Block'}
               </button>
             </>
           ) : reveal ? (
@@ -568,7 +595,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
             </>
           )}
 
-          <button onClick={() => go(1)} disabled={mode === 'exam' && pos >= total - 1} aria-label="Next question" className={`${iconBtn} border border-line bg-sunken`}>
+          <button onClick={() => go(1)} disabled={mode === 'exam' && pos >= range.end - 1} aria-label="Next question" className={`${iconBtn} border border-line bg-sunken`}>
             <ChevronRight size={18} />
           </button>
         </div>

@@ -8,7 +8,7 @@ import { navigate } from '../lib/nav'
 import { CloudSyncIndicator, useCloudSync } from '../lib/cloudSync'
 import type { DoctorAvatar } from './DoctorWalk'
 
-export type Tab = 'study' | 'practice' | 'review' | 'progress' | 'history' | 'notebook'
+export type Tab = 'study' | 'practice' | 'review' | 'progress' | 'history' | 'notebook' | 'exams'
 
 const TABS = [
   { id: 'study', label: 'Home', Icon: Home },
@@ -42,7 +42,7 @@ export default function AppNav({ tab, onChange, reviewCount, avatar, onPickAvata
 
         <nav aria-label="Primary navigation" className="hidden items-center gap-1 rounded-full border border-white/60 bg-surface/70 p-1.5 shadow-[0_8px_30px_-24px_#43286f77] backdrop-blur-xl md:flex">
           {TABS.map(({ id, label, Icon }) => {
-            const active = tab === id || (tab === 'history' && id === 'progress')
+            const active = tab === id || (tab === 'history' && id === 'progress') || (tab === 'exams' && id === 'practice')
             return <button key={id} onClick={() => onChange(id)} aria-current={active ? 'page' : undefined} className={`relative flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-bold transition-colors lg:px-5 ${active ? 'text-[#6328bc] dark:text-[#dec6ff]' : 'text-muted hover:text-ink'}`}>
               {active && <motion.span layoutId="fp-top-nav" className="absolute inset-0 rounded-full bg-[#eee0ff] shadow-sm dark:bg-[#442d64]" transition={{ type: 'spring', stiffness: 420, damping: 32, mass: .8 }} />}
               <Icon size={16} className="relative z-10" /><span className="relative z-10">{label}</span>
@@ -68,7 +68,7 @@ export default function AppNav({ tab, onChange, reviewCount, avatar, onPickAvata
     <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-50 mx-auto max-w-[520px] rounded-[26px] border border-white/80 bg-surface/95 p-1.5 shadow-[0_8px_36px_-9px_#3b24604b] backdrop-blur-xl dark:border-[#5c4b6e]/60 md:hidden">
       <div className="grid grid-cols-5 gap-1">
         {TABS.map(({ id, label, Icon }) => {
-          const active = tab === id || (tab === 'history' && id === 'progress')
+          const active = tab === id || (tab === 'history' && id === 'progress') || (tab === 'exams' && id === 'practice')
           return <button key={id} onClick={() => onChange(id)} aria-current={active ? 'page' : undefined} className={`relative flex h-[56px] flex-col items-center justify-center gap-1 rounded-[21px] text-[10px] font-semibold transition-colors ${active ? 'text-[#6323c1] dark:text-[#e5ccff]' : 'text-muted'}`}>
             {active && <motion.span layoutId="fp-mobile-nav" className="absolute inset-0 rounded-[21px] bg-[#eee2ff] dark:bg-[#443157]" transition={{ type: 'spring', stiffness: 420, damping: 32, mass: .8 }} />}
             <Icon size={19} strokeWidth={active ? 2.35 : 1.9} className="relative z-10" />

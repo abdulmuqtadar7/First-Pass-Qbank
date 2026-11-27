@@ -59,7 +59,10 @@ export type CoverageMode = 'core_concepts' | 'all'
 
 export type AdaptiveMode = 'daily' | 'review' | 'weak'
 
+export interface MockConfig { name: string; size: number; minutes: number; systems: string[]; breakMinutes: 0 | 5 }
+
 export type SessionSource =
+  | { kind: 'mock'; config: MockConfig }
   | { kind: 'adaptive'; mode: AdaptiveMode; size: number }
   | { kind: 'system'; system: string; coverageMode: CoverageMode }
   | { kind: 'block'; config: BlockConfig }

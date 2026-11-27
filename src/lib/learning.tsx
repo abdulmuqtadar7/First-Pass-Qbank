@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { conceptKey, selectSessionQuestions } from './sessionBuilder'
-import type { Answer, Confidence, OptionKey, Progress, Question, Session, SessionMode } from '../types/qbank'
+import type { Answer, Confidence, OptionKey, Progress, Question, Session, SessionMode, MockConfig } from '../types/qbank'
 import { cardTextValid, GENERATION_BATCH, pearlCandidates, reviewedCard, type FlashcardRating } from './flashcards'
+import type { MockState } from './mockExam'
 import { fieldKey, LEGACY_KEYS } from './accountStorage'
 
 export const LEARNING_KEY = 'fp:learning:v1'
@@ -33,6 +34,7 @@ export interface HistoryEntry {
   elapsed: number
   correct: number
   answered: number
+  mock?: MockConfig
 }
 
 export interface ActiveSession {
@@ -44,6 +46,7 @@ export interface ActiveSession {
   times: Record<string, number>
   startedAt: number
   updatedAt: number
+  mock?: MockState
 }
 
 export interface StudyNote { text: string; updatedAt: number; pinned?: boolean }

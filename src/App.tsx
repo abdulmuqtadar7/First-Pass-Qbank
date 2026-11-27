@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import AppNav, { type Tab } from './components/AppNav'
 import StudyTab from './components/StudyTab'
+import ExamCenter from './components/ExamCenter'
+import { mockQueue } from './lib/mockExam'
+import { btnGhost } from './lib/ui'
 import ReviewTab from './components/ReviewTab'
 import ProgressTab from './components/ProgressTab'
 import HistoryTab from './components/HistoryTab'
@@ -77,6 +80,10 @@ export default function App({ userId }: { userId: string }) {
       ids = adaptiveQueue(analyzeConcepts(questions, state.progress, schedule, attempts), state.progress, session.source.mode, session.source.size)
       if (!ids.length) { window.alert('No matching adaptive concepts are available right now.'); return }
     }
+    if (session.source?.kind === 'mock') {
+      ids = mockQueue(questions, session.source.config)
+      if (!ids.length) { window.alert('Not enough distinct concepts for this mock. Choose a smaller exam.'); return }
+    }
     if (!ids.length) ids = session.ids
     const next: Session = { ...session, ids: session.source?.kind === 'adaptive' ? ids : shuffle(ids) }
     setSession(next)
@@ -138,7 +145,8 @@ export default function App({ userId }: { userId: string }) {
           className="mx-auto w-full max-w-[1650px] px-3 pb-32 pt-3 sm:px-7 sm:pt-5 md:pb-24 lg:px-10"
         >
           {tab === 'study' && <StudyTab onStart={start} onResume={resume} hasSavedSession={!!active} avatar={avatar ?? 'male'} />}
-          {tab === 'practice' && <StudyTab variant="practice" onStart={start} onResume={resume} hasSavedSession={!!active} avatar={avatar ?? 'male'} />}
+          {tab === 'practice' && <div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/20 bg-surface p-4"><div><p className="text-sm font-bold">Ready for exam day?</p><p className="text-xs text-muted">Timed mock examinations and reports</p></div><button className={btnGhost} onClick={() => setTab('exams')}>Exam Center</button></div><StudyTab variant="practice" onStart={start} onResume={resume} hasSavedSession={!!active} avatar={avatar ?? 'male'} /></div>}
+          {tab === 'exams' && <ExamCenter onStart={(ids, config) => start(ids, config.name, 'exam', { kind: 'mock', config })} onResume={resume} onReview={review} onBack={() => setTab('practice')} />}
           {tab === 'review' && <ReviewTab onStart={start} />}
           {tab === 'progress' && <ProgressTab onViewHistory={() => setTab('history')} />}
           {tab === 'history' && <HistoryTab onReview={review} />}
