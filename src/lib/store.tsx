@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -106,7 +107,7 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
 
   const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     localStorage.setItem(fieldKey(userId, 'state'), JSON.stringify(state))
     localStorage.setItem(fieldKey(userId, 'theme'), state.theme)
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
@@ -116,7 +117,7 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
     localStorage.setItem(fieldKey(userId, 'imported'), JSON.stringify(imported))
   }, [imported, userId])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     localStorage.setItem(fieldKey(userId, 'daily'), JSON.stringify(daily))
   }, [daily, userId])
 

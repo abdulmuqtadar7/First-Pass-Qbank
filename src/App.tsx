@@ -27,7 +27,8 @@ export default function App({ userId }: { userId: string }) {
   const { active, setActive, schedule, attempts } = useLearning()
   const [path, setPath] = useState(window.location.pathname)
   const [tab, setTab] = useState<Tab>('study')
-  const [session, setSession] = useState<Session | null>(() => active?.session ?? null)
+  // Open the dashboard first, so students can explicitly resume or choose a new block.
+  const [session, setSession] = useState<Session | null>(null)
   const [sKey, setSKey] = useState(0)
   const [avatar, setAvatar] = useState<DoctorAvatar | null>(() => readAvatar(userId))
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(() => !readAvatar(userId))
@@ -85,9 +86,14 @@ export default function App({ userId }: { userId: string }) {
 
   const resume = useCallback(() => {
     if (!active) return
+    const available = new Set(questions.map(q => q.id))
+    if (!active.queue.length || active.queue.some(id => !available.has(id))) {
+      window.alert("This saved session contains questions that are no longer available. Your recorded progress is safe. You can start a new block or try again after restoring the question bank.")
+      return
+    }
     setSession(active.session)
     setSKey((k) => k + 1)
-  }, [active])
+  }, [active, questions])
 
   const due = useMemo(
     () => new Set([

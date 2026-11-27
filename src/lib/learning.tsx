@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { conceptKey, selectSessionQuestions } from './sessionBuilder'
 import type { Answer, Confidence, OptionKey, Progress, Question, Session, SessionMode } from '../types/qbank'
 import { fieldKey, LEGACY_KEYS } from './accountStorage'
@@ -112,7 +112,7 @@ const Context = createContext<LearningContextValue | null>(null)
 export function LearningProvider({ children, userId }: { children: ReactNode; userId: string }) {
   const [data, setData] = useState<LearningState>(() => load(userId))
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try { localStorage.setItem(fieldKey(userId, 'learning'), JSON.stringify(data)) }
     catch (error) { console.error('[FirstPass] Could not save extended learning data', error) }
   }, [data, userId])

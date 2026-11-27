@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Cloud, CloudOff, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useLearning, progressExport } from './learning'
 import { useStore } from './store'
@@ -57,6 +57,11 @@ export function CloudSyncProvider({ children, userId, boot }: { children: ReactN
   const serialized = JSON.stringify(snapshot)
   const latest = useRef(serialized)
   latest.current = serialized
+
+  // Mark local changes before the browser can reload and prefer an older cloud snapshot.
+  useLayoutEffect(() => {
+    if (serialized !== lastSaved.current) setPending(userId, true)
+  }, [serialized, userId])
 
   useEffect(() => {
     function onOnline() { setRetryVersion((v) => v + 1) }
@@ -149,7 +154,9 @@ export function CloudSyncProvider({ children, userId, boot }: { children: ReactN
     }
   }
 
-  const value = useMemo(() => ({ status, lastError, retry, notifyChanged }), [status, lastError, retry, notifyChanged])
+  // Do not display Saved while a newer snapshot is waiting for the debounce.
+  const visibleStatus: SyncStatus = status === 'saved' && serialized !== lastSaved.current ? 'pending' : status
+  const value = useMemo(() => ({ status: visibleStatus, lastError, retry, notifyChanged }), [visibleStatus, lastError, retry, notifyChanged])
   return <Context.Provider value={value}>
     {children}
     {status === 'offline' && <aside role="status" className="fixed bottom-24 right-4 z-[80] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#e1bd84] bg-surface p-4 text-ink shadow-2xl md:bottom-5">

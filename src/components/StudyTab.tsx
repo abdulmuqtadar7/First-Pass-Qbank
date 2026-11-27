@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { analyzeConcepts, masteryCounts } from '../lib/adaptive'
 import { quickPick } from '../lib/blocks'
+import { useCloudSync } from '../lib/cloudSync'
 import { SYSTEMS } from '../lib/data'
 import { dueConceptQuestions, useLearning } from '../lib/learning'
 import { getIcon } from '../lib/meta'
@@ -26,7 +27,8 @@ interface Props {
 
 export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, variant = 'home' }: Props) {
   const { questions, state, todayCount } = useStore()
-  const { schedule, settings, attempts } = useLearning()
+  const { schedule, settings, attempts, active, setActive } = useLearning()
+  const { status: syncStatus, retry } = useCloudSync()
   const { progress } = state
   const [builder, setBuilder] = useState(false)
   const [launcher, setLauncher] = useState<string | null>(null)
@@ -93,7 +95,18 @@ export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, v
     </section>
   )
 
+  const savedCount = active?.queue.filter(id => !!active.answers[id]?.selected).length ?? 0
+  const savedTotal = active?.queue.length ?? 0
+  const syncText = syncStatus === 'saved' ? 'Saved to cloud · ready to switch devices' : syncStatus === 'conflict' ? 'Sync conflict · resolve before switching devices' : syncStatus === 'offline' ? 'Cloud unavailable · retry before switching devices' : 'Saving to cloud… keep this page open'
   return <div className="space-y-10 md:space-y-14">
+    {active && <section aria-label="Unfinished study session" className={`${card} space-y-4 rounded-[26px] p-5 sm:p-7`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0"><p className={label}>Continue where you left off</p><h2 className="mt-1 text-lg font-bold tracking-tight">{active.session.title}</h2><p className="mt-1 text-xs text-muted">{active.session.source?.kind === 'adaptive' ? 'Adaptive practice' : active.session.mode === 'exam' ? 'Timed exam · timer paused while away' : 'Tutor mode'} · Question {Math.min(active.position + 1, savedTotal)} of {savedTotal}</p></div>
+        <span className="rounded-full bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent">{savedCount} / {savedTotal} answered</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-accent" style={{ width: `${savedTotal ? savedCount / savedTotal * 100 : 0}%` }}/></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className={`text-xs font-medium ${syncStatus === 'saved' ? 'text-good' : 'text-muted'}`}>{syncText}</p><div className="flex flex-wrap gap-2">{syncStatus === 'offline' && <button onClick={retry} className={btnGhost}>Retry sync</button>}<button className={btnGhost} onClick={() => { if (window.confirm('Discard this unfinished session? Recorded tutor progress stays saved; unsubmitted exam answers will be lost.')) setActive(null) }}>Discard session</button><button onClick={onResume} className={btnPrimary}><Play size={15}/> Resume session</button></div></div>
+    </section>}
     {variant === 'home' ? <>
       <section className="relative">
         <div className="journey-scene relative isolate overflow-hidden rounded-[30px] sm:rounded-[40px]">
@@ -125,7 +138,7 @@ export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, v
       <AdaptivePanel onStart={onStart}/>
       {systemDeck}
     </> : <>
-      <header className="rounded-[32px] bg-[linear-gradient(115deg,#f3eaff,#ffefe9)] px-6 py-10 dark:bg-[linear-gradient(115deg,#30243e,#29212f)] sm:px-10 sm:py-12"><p className="text-[11px] font-bold uppercase tracking-[.25em] text-accent">Practice / Make every question count</p><h1 className="mt-3 font-display text-[42px] leading-tight tracking-[-.06em] sm:text-[58px]">Choose your next challenge<span className="text-accent">.</span></h1><p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-muted">A focused session, a full system, or a custom multi-angle exam. Your questions are always randomized.</p><div className="mt-6 flex flex-wrap gap-3"><button onClick={() => setBuilder(true)} className={btnPrimary}><Plus size={17}/> Build custom session</button><button disabled={!questions.length} onClick={() => onStart(quickPick(questions, state, 10), 'Quick block', 'tutor')} className={btnGhost}><Play size={15}/> Quick 10-question drill</button>{hasSavedSession && <button onClick={onResume} className={btnGhost}><RotateCcw size={15}/> Resume session</button>}</div></header>
+      <header className="rounded-[32px] bg-[linear-gradient(115deg,#f3eaff,#ffefe9)] px-6 py-10 dark:bg-[linear-gradient(115deg,#30243e,#29212f)] sm:px-10 sm:py-12"><p className="text-[11px] font-bold uppercase tracking-[.25em] text-accent">Practice / Make every question count</p><h1 className="mt-3 font-display text-[42px] leading-tight tracking-[-.06em] sm:text-[58px]">Choose your next challenge<span className="text-accent">.</span></h1><p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-muted">A focused session, a full system, or a custom multi-angle exam. New non-adaptive sessions are randomized; resumed sessions keep their order.</p><div className="mt-6 flex flex-wrap gap-3"><button onClick={() => setBuilder(true)} className={btnPrimary}><Plus size={17}/> Build custom session</button><button disabled={!questions.length} onClick={() => onStart(quickPick(questions, state, 10), 'Quick block', 'tutor')} className={btnGhost}><Play size={15}/> Quick 10-question drill</button>{hasSavedSession && <button onClick={onResume} className={btnGhost}><RotateCcw size={15}/> Resume session</button>}</div></header>
       <section className={`${card} p-5 sm:p-7`}><p className={label}>Your preferred coverage mode</p><p className="mb-4 mt-2 text-[13px] text-muted">You can refine this separately when launching any system.</p><CoverageSelector value={coverageMode} onChange={setCoverageMode} total={questions.length} concepts={totalConcepts}/></section>
       <AdaptivePanel onStart={onStart}/>
       {systemDeck}

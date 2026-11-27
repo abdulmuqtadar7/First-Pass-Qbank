@@ -1,6 +1,7 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Flag, Flame, RotateCcw, Shuffle, Strikethrough, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { fisherYates } from '../lib/sessionBuilder'
 import { useLearning } from '../lib/learning'
 import { computeStreak } from '../lib/stats'
@@ -65,16 +66,6 @@ const EMPTY: Answer = { selected: null, struck: [] }
 const pad = (n: number) => String(n).padStart(2, '0')
 const fmt = (s: number) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`
 
-/** On a fresh player launch, reshuffle only future unanswered slots. */
-function shufflePending(items: string[], position: number, answers: Record<string, Answer>): string[] {
-  const next = [...items]
-  const slots: number[] = []
-  for (let i = position + 1; i < next.length; i++) if (!answers[next[i]]?.selected) slots.push(i)
-  const reordered = fisherYates(slots.map((index) => next[index]))
-  slots.forEach((index, i) => { next[index] = reordered[i] })
-  return next
-}
-
 export default function Player({ session, onExit, onReview, onRestart }: Props) {
   const { byId, state, recordAnswer, setConfidence, toggleFlag } = useStore()
   const { active, setActive, recordAttempt, rateConcept, recordHistory } = useLearning()
@@ -83,8 +74,8 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     && active.session.ids.join('|') === session.ids.join('|') ? active : null
   const [queue, setQueue] = useState(() => {
     const existing = (restored?.queue ?? session.ids).filter((id) => byId.has(id))
-    if (session.source?.kind === 'adaptive') return existing
-    return restored ? shufflePending(existing, restored.position, restored.answers) : fisherYates(existing)
+    // App has already selected and ordered the queue. Never reorder a restored block.
+    return existing
   })
   const total = queue.length
   const [pos, setPos] = useState(Math.min(Math.max(restored?.position ?? 0, 0), Math.max(0, total - 1)))
@@ -101,8 +92,10 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   const startedAt = useRef(restored ? Date.now() - Math.max(0, restored.updatedAt - restored.startedAt) : Date.now())
   const times = useRef<Record<string, number>>(restored?.times ?? {})
   const curId = useRef('')
-  const dir = useRef(1)
+  const dir = useRef(restored ? 0 : 1)
   const submitted = useRef(false)
+  const leaving = useRef(false)
+  const tutorSelections = useRef(new Set<string>())
   const scroller = useRef<HTMLDivElement>(null)
   const strip = useRef<HTMLDivElement>(null)
 
@@ -150,17 +143,39 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     return () => window.clearInterval(t)
   }, [done])
 
-  useEffect(() => {
-    if (done || mode === 'review') return
-    const save = () => setActive({
+  const saveSession = useCallback(() => {
+    if (done || mode === 'review' || submitted.current || leaving.current || !queue.length) return
+    setActive({
       session, queue, position: pos, answers, ratings, times: { ...times.current },
       startedAt: startedAt.current, updatedAt: Date.now(),
     })
-    save()
-    const timer = window.setInterval(save, 10_000)
-    document.addEventListener('visibilitychange', save)
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', save) }
   }, [session, queue, pos, answers, ratings, mode, done, setActive])
+
+  // Checkpoint each committed interaction before the next paint.
+  useLayoutEffect(() => { saveSession() }, [saveSession])
+
+  useEffect(() => {
+    if (done || mode === 'review') return
+    const timer = window.setInterval(saveSession, 10_000)
+    const checkpointOnHide = () => {
+      if (document.visibilityState === 'hidden') flushSync(saveSession)
+    }
+    const checkpointOnPageHide = () => flushSync(saveSession)
+    document.addEventListener('visibilitychange', checkpointOnHide)
+    window.addEventListener('pagehide', checkpointOnPageHide)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', checkpointOnHide)
+      window.removeEventListener('pagehide', checkpointOnPageHide)
+    }
+  }, [saveSession, done, mode])
+
+  function saveAndExit() {
+    if (leaving.current) return
+    saveSession()
+    leaving.current = true
+    onExit()
+  }
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 })
@@ -170,7 +185,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }, [pos, queue])
 
   function submit() {
-    if (submitted.current) return
+    if (submitted.current || leaving.current) return
     submitted.current = true
     if (mode === 'exam') {
       for (const id of queue) {
@@ -217,7 +232,12 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }
 
   function choose(k: OptionKey) {
-    if (!q || locked) return
+    if (!q || locked || leaving.current || submitted.current) return
+    if (mode === 'tutor') {
+      // Prevent repeated input before React commits the first selected answer.
+      if (tutorSelections.current.has(q.id)) return
+      tutorSelections.current.add(q.id)
+    }
     setAnswers((a) => ({ ...a, [q.id]: { selected: k, struck: a[q.id]?.struck ?? [] } }))
     setStrikeMode(false)
     if (mode === 'tutor') {
@@ -357,8 +377,8 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
           <motion.div className="h-full rounded-r-full bg-accent" animate={{ width: `${((pos + 1) / total) * 100}%` }} transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.8 }} />
         </div>
         <div className="mx-auto flex h-[62px] max-w-4xl items-center gap-2 px-3 sm:px-5">
-          <button onClick={onExit} aria-label="Exit block" className={`${iconBtn} border border-line bg-sunken`}>
-            <ArrowLeft size={18} />
+          <button onClick={saveAndExit} aria-label={mode === 'review' ? 'Exit review' : 'Save and exit'} title={mode === 'exam' ? 'Save and exit (timer pauses when saved)' : 'Save and exit'} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-sunken px-2.5 py-2 text-xs font-semibold text-muted hover:text-ink">
+            <ArrowLeft size={18} /><span className="hidden sm:inline">{mode === 'review' ? 'Exit' : 'Save & exit'}</span>
           </button>
           <div className="min-w-0 flex-1 pl-1 sm:pl-3"><p className="truncate text-[12px] font-semibold tracking-tight">{session.title}</p><p className="mt-0.5 truncate font-mono text-[10px] text-muted">Question {pad(pos + 1)} <span className="text-muted/50">/</span> {pad(total)} <span className="px-1 text-muted/40">·</span> {mode === 'exam' ? q.system : q.concept_name}</p></div>
           <span title="Daily study streak" className="hidden items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 py-1.5 text-[11px] font-semibold text-muted sm:inline-flex"><Flame size={13} className="text-orange-500" /> {streak}d</span>
