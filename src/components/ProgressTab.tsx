@@ -1,3 +1,4 @@
+import InstallQB360 from './InstallQB360'
 import { ArrowUpRight, BarChart3, CalendarDays, CheckCircle2, ChevronRight, Download, RotateCcw, Target } from 'lucide-react'
 import { progressExport, useLearning } from '../lib/learning'
 import { conceptsMastered, summarize } from '../lib/stats'
@@ -60,6 +61,7 @@ export function WorkspacePreferences() {
   }
 
   return <div className="mx-auto max-w-3xl space-y-4"><h1 className="font-display text-3xl font-bold">Workspace preferences</h1>
+      <InstallQB360 />
       <section>
         <p className={`${label} mb-3`}>Study settings and data</p>
         <div className={`${card} divide-y divide-line overflow-hidden`}>

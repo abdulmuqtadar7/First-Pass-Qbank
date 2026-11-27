@@ -75,17 +75,17 @@ export default function AuthScreen() {
     <div className="min-h-dvh bg-canvas text-ink lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(470px,0.82fr)]">
       <section className="relative hidden min-h-dvh flex-col justify-between overflow-hidden bg-[#2d2341] px-[clamp(32px,6vw,112px)] py-12 text-[#faf5ff] lg:flex">
         <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(circle at 65% 40%,#8553b44f,transparent 55%),radial-gradient(circle at 12% 100%,#784f944f,transparent 40%)' }} />
-        <div className="relative flex items-center gap-3 text-xl font-bold tracking-tight"><Logo /> FirstPass <span className="font-light">Q-Bank</span></div>
+        <div className="relative flex items-center gap-3 text-xl font-bold tracking-tight"><Logo /> <span>QB360</span></div>
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .48 }} className="relative max-w-xl">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#d6b8ff3b] bg-[#bd98ef1c] px-4 py-2 text-[11px] font-extrabold tracking-[.22em] text-[#debfff]"><Sparkles size={14} /> YOUR STUDY JOURNEY</span>
           <h2 className="mt-7 font-display text-[clamp(58px,6.2vw,100px)] leading-[.97] tracking-[-.075em]">Medicine is a journey.<span className="block text-[#c6a0ff]">Make it yours.</span></h2>
-          <p className="mt-8 max-w-md text-[16px] leading-8 text-[#ddd0e9]">One beautifully focused place for every First Aid concept, every practice question, and every step of your progress.</p>
+          <p className="mt-8 max-w-md text-[16px] leading-8 text-[#ddd0e9]">Beyond the question. One focused place for medical concepts, practice questions, and every step of your progress.</p>
         </motion.div>
         <div className="relative flex flex-wrap gap-5 text-xs text-[#d3c2e5]"><span className="inline-flex items-center gap-2"><ShieldCheck size={16} /> Private cloud progress</span><span className="inline-flex items-center gap-2"><BookOpen size={16} /> Your whole question bank</span></div>
       </section>
 
       <section className="flex min-h-dvh flex-col px-5 pb-16 pt-8 sm:px-10 lg:justify-center lg:px-[clamp(32px,6vw,110px)]">
-        <div className="mb-14 flex items-center gap-2.5 text-[18px] font-bold lg:hidden"><Logo /> FirstPass <span className="font-normal">Q-Bank</span></div>
+        <div className="mb-14 flex items-center gap-2.5 text-[18px] font-bold lg:hidden"><Logo /> <span>QB360</span></div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={currentMode} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .18 }} className="mx-auto w-full max-w-[440px]">
             <span className="text-[11px] font-extrabold uppercase tracking-[.23em] text-accent">Your personal study space</span>
@@ -105,11 +105,11 @@ export default function AuthScreen() {
                 {currentMode === 'login' && <div className="text-right"><button type="button" onClick={() => changeMode('forgot')} className="text-xs font-semibold text-accent hover:underline">Forgot password?</button></div>}
                 {error && <p role="alert" className="rounded-xl border border-bad/25 bg-bad/10 px-4 py-3 text-xs leading-5 text-bad">{error}</p>}
                 {message && <p role="status" className="flex gap-2 rounded-xl border border-good/25 bg-good/10 px-4 py-3 text-xs leading-5 text-good"><Check size={16} className="shrink-0" />{message}</p>}
-                <button disabled={busy} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[#783aca] px-5 text-[14px] font-bold text-white shadow-[0_13px_30px_-14px_#783acaaa] transition hover:bg-[#682ac1] disabled:opacity-60">{busy ? 'Please wait…' : currentMode === 'signup' ? 'Create my account' : currentMode === 'forgot' ? 'Send reset link' : currentMode === 'recover' ? 'Save new password' : 'Log in to FirstPass'} <ArrowRight size={18} /></button>
+                <button disabled={busy} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[#783aca] px-5 text-[14px] font-bold text-white shadow-[0_13px_30px_-14px_#783acaaa] transition hover:bg-[#682ac1] disabled:opacity-60">{busy ? 'Please wait…' : currentMode === 'signup' ? 'Create my account' : currentMode === 'forgot' ? 'Send reset link' : currentMode === 'recover' ? 'Save new password' : 'Log in to QB360'} <ArrowRight size={18} /></button>
               </form>
             )}
 
-            {isCloudConfigured && currentMode !== 'recover' && <div className="mt-8 border-t border-line pt-6 text-center text-[13px] text-muted">{currentMode === 'login' ? 'New to FirstPass?' : 'Already have an account?'} <button onClick={() => changeMode(currentMode === 'login' ? 'signup' : 'login')} className="ml-1 font-bold text-accent hover:underline">{currentMode === 'login' ? 'Create an account' : 'Log in'}</button></div>}
+            {isCloudConfigured && currentMode !== 'recover' && <div className="mt-8 border-t border-line pt-6 text-center text-[13px] text-muted">{currentMode === 'login' ? 'New to QB360?' : 'Already have an account?'} <button onClick={() => changeMode(currentMode === 'login' ? 'signup' : 'login')} className="ml-1 font-bold text-accent hover:underline">{currentMode === 'login' ? 'Create an account' : 'Log in'}</button></div>}
             <p className="mt-12 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted"><ShieldCheck size={14}/> Your progress is private to your account.</p>
           </motion.div>
         </AnimatePresence>
@@ -119,5 +119,5 @@ export default function AuthScreen() {
 }
 
 function Logo() {
-  return <span aria-hidden className="flex h-9 items-center gap-1"><span className="h-6 w-3 -skew-x-[18deg] rounded-[4px] bg-[#b78cfa]"/><span className="h-6 w-3 -skew-x-[18deg] rounded-[4px] bg-[#7130c7]"/></span>
+  return <img src="/qb360-icons/icon.svg" alt="" aria-hidden="true" className="h-9 w-9 shrink-0 rounded-xl" />
 }

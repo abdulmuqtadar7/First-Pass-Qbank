@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import './desktopWorkspace.css'
+import './lib/pwa'
 import { readDesktopDensity, readDesktopSidebar, writeDesktopPreference, type DesktopDensity } from './lib/desktopPreferences'
 import { AnimatePresence, motion } from 'motion/react'
 import AppNav, { type Tab } from './components/AppNav'
@@ -44,7 +45,7 @@ class ScreenBoundary extends Component<{ children: ReactNode }, { failed: boolea
   state = { failed: false }
   static getDerivedStateFromError() { return { failed: true } }
   render() {
-    if (this.state.failed) return <div role="alert" className="mx-auto max-w-md p-6 text-center text-ink"><p className="font-semibold">This screen could not be loaded.</p><p className="mt-2 text-sm text-muted">Reload to try again. Previously saved progress is not reset.</p><button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white" onClick={() => window.location.reload()}>Reload FirstPass</button></div>
+    if (this.state.failed) return <div role="alert" className="mx-auto max-w-md p-6 text-center text-ink"><p className="font-semibold">This screen could not be loaded.</p><p className="mt-2 text-sm text-muted">Reload to try again. Previously saved progress is not reset.</p><button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white" onClick={() => window.location.reload()}>Reload QB360</button></div>
     return this.props.children
   }
 }
@@ -161,7 +162,7 @@ export default function App({ userId }: { userId: string }) {
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-6 text-center text-ink">
       <div className="w-full max-w-sm rounded-[30px] border border-line bg-surface p-9 shadow-xl">
         <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-2xl font-bold text-accent">+</span>
-        <h1 className="text-2xl font-bold tracking-tight">FirstPass Q-Bank</h1>
+        <h1 className="text-2xl font-bold tracking-tight">QB360</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           {bankStatus === 'error' ? 'Your question bank could not be loaded. Please try again.' : 'Preparing your study desk and question bank…'}
         </p>

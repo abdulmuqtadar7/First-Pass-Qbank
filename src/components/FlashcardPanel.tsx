@@ -35,7 +35,7 @@ export default function FlashcardPanel() {
     const csvCell = (value: string) => `"${(/^[\s]*[=+@-]/.test(value) ? "'" + value : value).replace(/"/g, '""')}"`
     const csv = ['Front,Back', ...flashcards.map(c => [c.front,c.back].map(csvCell).join(','))].join('\r\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a'); a.href = url; a.download = 'firstpass-flashcards.csv'; document.body.appendChild(a); a.click(); a.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    const a = document.createElement('a'); a.href = url; a.download = 'qb360-flashcards.csv'; document.body.appendChild(a); a.click(); a.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return <div className="space-y-4">
     <section className={`${card} space-y-4 p-4 sm:p-5`}>

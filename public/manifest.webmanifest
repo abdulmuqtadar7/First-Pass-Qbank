@@ -1,13 +1,31 @@
 {
-  "name": "FirstPass Q-Bank",
-  "short_name": "FirstPass",
-  "description": "USMLE Step 1 & FCPS Part 1 question bank",
+  "id": "/",
+  "name": "QB360",
+  "short_name": "QB360",
+  "description": "Your private medical question bank and learning workspace.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#4f46e5",
+  "background_color": "#f9f7fc",
+  "theme_color": "#7130c7",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "/qb360-icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/qb360-icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/qb360-icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

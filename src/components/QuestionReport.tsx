@@ -14,7 +14,7 @@ export default function QuestionReport({ q }: { q: Question }) {
     try {
       const { error } = await supabase.rpc('firstpass_report_question', { p_question_key: encodeURIComponent(q.id), p_category: category, p_detail: detail.trim().replaceAll('\u0000', '') })
       if (error) throw error
-      setDetail(''); setOpen(false); setMessage('Report sent. Thank you for helping improve FirstPass.')
+      setDetail(''); setOpen(false); setMessage('Report sent. Thank you for helping improve QB360.')
     } catch { setMessage('Could not send the report. Please try again.') }
     finally { setBusy(false) }
   }

@@ -8,10 +8,10 @@
     />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>FirstPass Q-Bank</title>
+    
+    
+    
+    <title>QB360</title>
     <script>
       try {
         var s = JSON.parse(localStorage.getItem('fp:state:v1') || '{}');
@@ -19,6 +19,11 @@
         if (t === 'dark') document.documentElement.classList.add('dark');
       } catch (e) {}
     </script>
+  
+    <!-- QB360 PWA metadata -->
+    <link rel="icon" type="image/svg+xml" href="/qb360-icons/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/qb360-icons/apple-touch-icon.png" />
   </head>
   <body>
     <div id="root"></div>

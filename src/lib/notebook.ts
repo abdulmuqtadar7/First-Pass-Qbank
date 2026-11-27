@@ -12,7 +12,7 @@ export function listNotes(notes: Record<string, StudyNote>, byId: ReadonlyMap<st
 }
 
 export function notesAsText(notes: Record<string, StudyNote>, byId: ReadonlyMap<string, Question>): string {
-  return ['FirstPass — Personal notebook', ...listNotes(notes, byId).map(([id, note]) => {
+  return ['QB360 — Personal notebook', ...listNotes(notes, byId).map(([id, note]) => {
     const q = byId.get(id)
     return `${note.pinned ? '[Pinned] ' : ''}${q?.system ?? 'Unavailable question'} — ${q?.concept_name ?? id}\nQuestion ID: ${id}\n${note.text}`
   })].join('\n\n---\n\n') + '\n'

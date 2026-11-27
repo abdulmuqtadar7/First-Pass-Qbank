@@ -47,9 +47,9 @@ export default function AppNav({ tab, onChange, reviewCount, avatar, onPickAvata
   return <>
     <header className="fp-workspace-header relative z-40 mx-auto w-full max-w-[1650px] px-4 pt-4 sm:px-7 sm:pt-5 lg:px-10">
       <div className="flex h-14 items-center justify-between gap-2 sm:h-16">
-        <button onClick={() => onChange('study')} className="flex min-w-0 items-center gap-2 text-left" aria-label="FirstPass home">
-          <span className="flex h-9 w-10 items-center gap-[3px]"><span className="h-[23px] w-[15px] -skew-x-[18deg] rounded-[5px] bg-[#b58dff]" /><span className="h-[23px] w-[15px] -skew-x-[18deg] rounded-[5px] bg-[#6c30c8]" /></span>
-          <span className="whitespace-nowrap text-[19px] font-extrabold tracking-[-.065em] sm:text-[22px]">FirstPass <span className="hidden font-medium lg:inline">Q-Bank</span></span>
+        <button onClick={() => onChange('study')} className="flex min-w-0 items-center gap-2 text-left" aria-label="QB360 home">
+          <img src="/qb360-icons/icon.svg" alt="" aria-hidden="true" className="h-9 w-9 shrink-0 rounded-xl" />
+          <span className="whitespace-nowrap text-[19px] font-extrabold tracking-[-.065em] sm:text-[22px]">QB360</span>
         </button>
 
         <button type="button" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} onClick={onToggleSidebar} className="fp-sidebar-toggle hidden rounded-lg border border-line bg-surface p-2 text-muted hover:text-ink">{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>

@@ -1,26 +1,10 @@
-const CACHE = 'firstpass-v1';
-
-self.addEventListener('install', () => self.skipWaiting());
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
-  );
-});
-
-self.addEventListener('fetch', (e) => {
-  const req = e.request;
-  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
-  e.respondWith(
-    fetch(req)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
-        return res;
-      })
-      .catch(() => caches.match(req).then((m) => m || caches.match('/index.html'))),
-  );
+/* QB360 online-first install worker, v1. No caches or private data. */
+const offlineDocument = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#7130c7"><title>QB360 — Connection unavailable</title><style>html{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f9f7fc;color:#211837;font:16px system-ui,sans-serif}main{box-sizing:border-box;width:min(92vw,420px);padding:32px;text-align:center;border:1px solid #e6dff2;border-radius:24px;background:white}h1{font-size:24px;margin:18px 0 10px}p{color:#625a70;line-height:1.6}button{font:inherit;font-weight:650;background:#7130c7;color:white;border:0;border-radius:12px;padding:12px 24px;cursor:pointer}svg{color:#7130c7}@media(prefers-color-scheme:dark){body{background:#151021;color:#f1ebff}main{background:#211a30;border-color:#493a5f}p{color:#c2b7d3}svg{color:#b78cfa}}</style></head><body><main><svg aria-hidden="true" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"/></svg><h1>No internet connection</h1><p>Please check your internet connection. QB360 will reconnect automatically when internet access is restored.</p><button id="retry" type="button">Try again</button><p>Previously saved progress stays on this device until it can synchronize.</p></main><script>document.getElementById('retry').addEventListener('click',()=>location.reload());window.addEventListener('online',()=>location.reload(),{once:true});</script></body></html>`;
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET' || request.mode !== 'navigate' || new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => new Response(offlineDocument, {
+    status: 503,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-QB360-Offline': '1' }
+  })));
 });
