@@ -45,7 +45,7 @@ export interface ActiveSession {
   updatedAt: number
 }
 
-export interface StudyNote { text: string; updatedAt: number }
+export interface StudyNote { text: string; updatedAt: number; pinned?: boolean }
 export interface Flashcard {
   id: string
   questionId: string
@@ -101,6 +101,8 @@ interface LearningContextValue extends LearningState {
   rateConcept: (q: Question, rating: Confidence) => void
   recordHistory: (entry: Omit<HistoryEntry, 'id' | 'completedAt'>) => void
   saveNote: (id: string, text: string) => void
+  deleteNote: (id: string) => void
+  toggleNotePin: (id: string) => void
   addFlashcard: (question: Question) => void
   gradeFlashcard: (id: string, rating: Confidence) => void
   setSettings: (settings: Partial<LearningSettings>) => void
@@ -163,7 +165,26 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
   }, [])
 
   const saveNote = useCallback((id: string, value: string) => {
-    setData((s) => ({ ...s, notes: { ...s.notes, [id]: { text: value, updatedAt: Date.now() } } }))
+    setData((s) => {
+      if (s.notes[id]?.text === value) return s
+      return { ...s, notes: { ...s.notes, [id]: { ...s.notes[id], text: value, updatedAt: Date.now() } } }
+    })
+  }, [])
+
+  const deleteNote = useCallback((id: string) => {
+    setData((s) => {
+      if (!Object.prototype.hasOwnProperty.call(s.notes, id)) return s
+      const notes = { ...s.notes }; delete notes[id]
+      return { ...s, notes }
+    })
+  }, [])
+
+  const toggleNotePin = useCallback((id: string) => {
+    setData((s) => {
+      const note = s.notes[id]
+      if (!note?.text.trim()) return s
+      return { ...s, notes: { ...s.notes, [id]: { ...note, pinned: !note.pinned } } }
+    })
   }, [])
 
   const addFlashcard = useCallback((q: Question) => {
@@ -195,8 +216,8 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
   }, [])
 
   const value = useMemo(() => ({ ...data, setActive, recordAttempt, rateConcept,
-    recordHistory, saveNote, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress }),
-  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress])
+    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress }),
+  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

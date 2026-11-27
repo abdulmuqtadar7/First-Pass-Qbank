@@ -12,6 +12,7 @@ import type { Answer, Confidence, OptionKey, Session } from '../types/qbank'
 import BlockReport from './BlockReport'
 import ExplanationSheet from './ExplanationSheet'
 import QuestionReport from './QuestionReport'
+import NoteEditor from './NoteEditor'
 
 interface Props {
   session: Session
@@ -508,6 +509,11 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
               )
             })}
           </div>
+
+          {mode === 'tutor' && !reveal && <details className={`${card} p-4`}>
+            <summary className="cursor-pointer text-sm font-semibold text-accent">Personal note</summary>
+            <div className="mt-3"><NoteEditor q={q} /></div>
+          </details>}
 
           {reveal && (
             <div className="space-y-5 pb-6">
