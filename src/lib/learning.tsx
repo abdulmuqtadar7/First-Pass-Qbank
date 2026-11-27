@@ -126,14 +126,17 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     setData((s) => {
       const key = conceptKey(q)
       const prev = s.schedule[key]
-      const intervalDays = correct ? Math.max(3, prev?.intervalDays ?? 3) : 1
+      // Only a later recall can grow the interval; repeated same-day answers do not.
+      const spacedRecall = !!prev && now >= prev.dueAt && prev.repetitions > 0
+      const intervalDays = correct ? (spacedRecall ? Math.min(90, Math.max(3, Math.round(prev.intervalDays * 2))) : Math.max(3, prev?.intervalDays ?? 3)) : 1
+      const repetitions = correct ? (spacedRecall || !prev?.repetitions ? (prev?.repetitions ?? 0) + 1 : prev.repetitions) : 0
       return {
         ...s,
         attempts: [...s.attempts.slice(-14_999), { id: q.id, at: now, correct, seconds: Math.max(0, seconds), mode }],
         schedule: {
           ...s.schedule,
           [key]: { dueAt: now + intervalDays * DAY, intervalDays,
-            repetitions: correct ? (prev?.repetitions ?? 0) + 1 : 0, lastReviewed: now },
+            repetitions, lastReviewed: now },
         },
       }
     })
@@ -144,12 +147,12 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     setData((s) => {
       const key = conceptKey(q)
       const prev = s.schedule[key]
+      // Rating refines the interval for the answer already recorded; no extra repetition.
       const intervalDays = rating === 'hard' ? 1 : rating === 'good'
-        ? Math.min(90, prev?.repetitions ? Math.max(3, Math.round(prev.intervalDays * 2)) : 3)
-        : Math.min(120, prev?.repetitions ? Math.max(7, Math.round(prev.intervalDays * 2.5)) : 7)
+        ? Math.max(3, prev?.intervalDays ?? 3) : Math.max(7, prev?.intervalDays ?? 7)
       return { ...s, schedule: { ...s.schedule, [key]: {
         dueAt: now + intervalDays * DAY, intervalDays,
-        repetitions: rating === 'hard' ? 0 : (prev?.repetitions ?? 0) + 1,
+        repetitions: rating === 'hard' ? 0 : prev?.repetitions ?? 0,
         lastReviewed: now,
       } } }
     })

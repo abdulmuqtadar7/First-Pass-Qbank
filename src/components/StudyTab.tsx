@@ -1,16 +1,18 @@
 import { ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, Flame, Layers3, Play, Plus, RotateCcw, Sparkles, Target, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
+import { analyzeConcepts, masteryCounts } from '../lib/adaptive'
 import { quickPick } from '../lib/blocks'
 import { SYSTEMS } from '../lib/data'
 import { dueConceptQuestions, useLearning } from '../lib/learning'
 import { getIcon } from '../lib/meta'
 import { buildSystemSession, countConcepts } from '../lib/sessionBuilder'
-import { computeStreak, conceptsMastered, summarize, weakQuestions } from '../lib/stats'
+import { computeStreak, summarize, weakQuestions } from '../lib/stats'
 import { useStore } from '../lib/store'
 import { btnGhost, btnPrimary, card, label } from '../lib/ui'
 import type { CoverageMode, SessionMode, SessionSource } from '../types/qbank'
 import BlockBuilder from './BlockBuilder'
+import AdaptivePanel from './AdaptivePanel'
 import CoverageSelector from './CoverageSelector'
 import { DoctorWalk, type DoctorAvatar } from './DoctorWalk'
 
@@ -24,13 +26,13 @@ interface Props {
 
 export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, variant = 'home' }: Props) {
   const { questions, state, todayCount } = useStore()
-  const { schedule, settings } = useLearning()
+  const { schedule, settings, attempts } = useLearning()
   const { progress } = state
   const [builder, setBuilder] = useState(false)
   const [launcher, setLauncher] = useState<string | null>(null)
   const [coverageMode, setCoverageMode] = useState<CoverageMode>('core_concepts')
   const totalConcepts = useMemo(() => countConcepts(questions), [questions])
-  const mastered = useMemo(() => conceptsMastered(questions, progress), [questions, progress])
+  const mastered = useMemo(() => masteryCounts(analyzeConcepts(questions, progress, schedule, attempts)).mastered, [questions, progress, schedule, attempts])
   const streak = computeStreak(state.studyDates)
   const goal = Math.max(1, settings.dailyGoal)
   const goalPct = Math.min(100, Math.round((todayCount / goal) * 100))
@@ -83,7 +85,7 @@ export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, v
             <div className="relative flex items-start justify-between"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#f1e8ff] text-[#8145d8] shadow-[inset_0_1px_#ffffff] dark:bg-[#3d3052] dark:text-[#c9a6ff]"><Icon size={23} strokeWidth={1.8} /></span><span className="grid h-8 w-8 place-items-center rounded-full border border-line bg-surface/80 text-muted transition group-hover:text-accent"><ArrowUpRight size={16} /></span></div>
             <h3 className="relative mt-6 text-[18px] font-bold tracking-tight">{name}</h3>
             <p className="relative mt-1.5 text-[11px] font-medium text-muted">{available ? `${qs.length.toLocaleString()} Total Qs · ${concepts.toLocaleString()} Unique Concepts` : 'Coming soon'}</p>
-            <div className="relative mt-5 flex items-center justify-between text-[11px] font-semibold text-muted"><span>{available ? `${answered} questions studied` : 'No questions yet'}</span><span>{available ? `${sum.pct}% mastered` : ''}</span></div>
+            <div className="relative mt-5 flex items-center justify-between text-[11px] font-semibold text-muted"><span>{available ? `${answered} questions studied` : 'No questions yet'}</span><span>{available ? `${sum.pct}% marked complete` : ''}</span></div>
             <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-[#eae0f3] dark:bg-[#382d47]"><motion.div initial={false} animate={{ width: `${qs.length ? Math.round(answered / qs.length * 100) : 0}%` }} className="h-full rounded-full bg-[linear-gradient(90deg,#ae85ff,#7136d6)]" /></div>
           </motion.button>
         })}
@@ -120,10 +122,12 @@ export default function StudyTab({ onStart, onResume, hasSavedSession, avatar, v
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[26px] border border-[#e9def4] bg-surface/70 px-5 py-4 shadow-sm dark:border-line sm:px-7"><div><p className="text-[13px] font-bold">Ready for a focused sprint?</p><p className="mt-0.5 text-[11px] text-muted">{due ? `${due} questions ready for review` : 'Fresh questions are waiting for you'} · Every block starts shuffled.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => onStart(quickPick(questions, state, 10), 'Quick block', 'tutor')} disabled={!questions.length} className={btnGhost}><Play size={14}/> Quick 10</button><button onClick={() => setBuilder(true)} className={btnGhost}><Plus size={15}/> Custom block</button></div></div>
+      <AdaptivePanel onStart={onStart}/>
       {systemDeck}
     </> : <>
       <header className="rounded-[32px] bg-[linear-gradient(115deg,#f3eaff,#ffefe9)] px-6 py-10 dark:bg-[linear-gradient(115deg,#30243e,#29212f)] sm:px-10 sm:py-12"><p className="text-[11px] font-bold uppercase tracking-[.25em] text-accent">Practice / Make every question count</p><h1 className="mt-3 font-display text-[42px] leading-tight tracking-[-.06em] sm:text-[58px]">Choose your next challenge<span className="text-accent">.</span></h1><p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-muted">A focused session, a full system, or a custom multi-angle exam. Your questions are always randomized.</p><div className="mt-6 flex flex-wrap gap-3"><button onClick={() => setBuilder(true)} className={btnPrimary}><Plus size={17}/> Build custom session</button><button disabled={!questions.length} onClick={() => onStart(quickPick(questions, state, 10), 'Quick block', 'tutor')} className={btnGhost}><Play size={15}/> Quick 10-question drill</button>{hasSavedSession && <button onClick={onResume} className={btnGhost}><RotateCcw size={15}/> Resume session</button>}</div></header>
       <section className={`${card} p-5 sm:p-7`}><p className={label}>Your preferred coverage mode</p><p className="mb-4 mt-2 text-[13px] text-muted">You can refine this separately when launching any system.</p><CoverageSelector value={coverageMode} onChange={setCoverageMode} total={questions.length} concepts={totalConcepts}/></section>
+      <AdaptivePanel onStart={onStart}/>
       {systemDeck}
     </>}
 

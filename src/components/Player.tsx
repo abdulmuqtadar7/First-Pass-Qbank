@@ -83,6 +83,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
     && active.session.ids.join('|') === session.ids.join('|') ? active : null
   const [queue, setQueue] = useState(() => {
     const existing = (restored?.queue ?? session.ids).filter((id) => byId.has(id))
+    if (session.source?.kind === 'adaptive') return existing
     return restored ? shufflePending(existing, restored.position, restored.answers) : fisherYates(existing)
   })
   const total = queue.length
@@ -136,7 +137,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   }
 
   function restartSession() {
-    if (answeredCount > 0 && !window.confirm('Start a new random session? This clears current session answers, but preserves saved progress.')) return
+    if (answeredCount > 0 && !window.confirm(session.source?.kind === 'adaptive' ? 'Rebuild your adaptive queue? Recorded progress stays intact.' : 'Start a new random session? This clears current session answers, but preserves saved progress.')) return
     onRestart()
   }
 
@@ -237,9 +238,13 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
 
   function rate(level: Confidence) {
     if (q === undefined || mode === 'exam' || reveal === false) return
-    setConfidence(q.id, level)
-    rateConcept(q, level)
-    setRatings((r) => ({ ...r, [q.id]: level }))
+    // Confidence cannot turn an incorrect answer into demonstrated mastery.
+    const effective = ans.selected === q.correct_option ? level : 'hard'
+    if (mode === 'tutor' || effective === 'hard') {
+      setConfidence(q.id, effective)
+      rateConcept(q, effective)
+    }
+    setRatings((r) => ({ ...r, [q.id]: effective }))
     go(1)
   }
 
@@ -250,9 +255,9 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
   useEffect(() => {
     // Explicit coverage sessions must present their full selected queue, even if
     // progress previously marked an angle as skipped through "Easy".
-    if (done || mode !== 'tutor' || !q || coverageMode !== undefined) return
+    if (done || mode !== 'tutor' || !q || coverageMode !== undefined || session.source?.kind === 'adaptive') return
     if (dir.current > 0 && !answers[q.id]?.selected && state.progress[q.id]?.status === 'skipped') go(1)
-  }, [pos, state.progress, coverageMode])
+  }, [pos, state.progress, coverageMode, session.source])
 
   useEffect(() => {
     if (done) return
@@ -373,7 +378,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         </div>
         <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 pb-3 sm:px-5">
           <span className="mr-auto inline-flex min-w-0 items-center truncate rounded-lg border border-accent/15 bg-accent/8 px-2.5 py-1.5 text-[10px] font-semibold text-accent">
-            {coverageMode === 'core_concepts' ? 'Complete Coverage · 1 per concept' : coverageMode === 'all' ? 'Full Bank · All angles' : mode === 'review' ? 'Review session' : 'Practice drill'}
+            {session.source?.kind === 'adaptive' ? 'Adaptive practice · 1 per concept' : coverageMode === 'core_concepts' ? 'Complete Coverage · 1 per concept' : coverageMode === 'all' ? 'Full Bank · All angles' : mode === 'review' ? 'Review session' : 'Practice drill'}
           </span>
           <button type="button" aria-pressed={strikeMode} onClick={() => setStrikeMode((value) => !value)} title="Toggle strike mode (S)" disabled={locked} className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-35 ${strikeMode ? 'border-accent/40 bg-accent/10 text-accent' : 'border-line text-muted hover:bg-sunken'}`}><Strikethrough size={14} /><span className="hidden sm:inline">Strike mode</span><span className="sm:hidden">S</span></button>
           <button
@@ -514,7 +519,9 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
                 <button
                   key={r.k}
                   onClick={() => rate(r.k)}
-                  className={`flex flex-1 items-center justify-center gap-2 px-2 py-2.5 text-[12px] font-semibold transition-colors ${
+                  disabled={mode === 'tutor' && !isCorrectPick && r.k !== 'hard'}
+                  title={mode === 'tutor' && !isCorrectPick && r.k !== 'hard' ? 'Incorrect answers are scheduled for review tomorrow' : undefined}
+                  className={`disabled:opacity-40 flex flex-1 items-center justify-center gap-2 px-2 py-2.5 text-[12px] font-semibold transition-colors ${
                     ratings[q.id] === r.k ? 'bg-accent/10 text-accent' : 'text-ink hover:bg-sunken'
                   }`}
                 >

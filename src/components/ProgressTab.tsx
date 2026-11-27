@@ -8,6 +8,7 @@ import { useStore } from '../lib/store'
 import { card, label } from '../lib/ui'
 import { countConcepts } from '../lib/sessionBuilder'
 import { useAuth } from '../lib/auth'
+import AdaptivePanel from './AdaptivePanel'
 
 export default function ProgressTab({ onViewHistory }: { onViewHistory: () => void }) {
   const { user } = useAuth()
@@ -52,7 +53,7 @@ export default function ProgressTab({ onViewHistory }: { onViewHistory: () => vo
             <span className="mt-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-semibold text-muted"><Target size={13} className="text-accent" /> Progress over perfection</span>
           </div>
           <div className="grid grid-cols-2 gap-px bg-line">
-            <Metric Icon={CheckCircle2} title="Mastered" value={sum.mastered} note="Questions secured" />
+            <Metric Icon={CheckCircle2} title="Marked confident" value={sum.mastered} note="Questions rated Good or Easy" />
             <Metric Icon={Target} title="Remaining" value={sum.remaining} note="Questions to tackle" />
             <Metric Icon={ArrowUpRight} title="Marked easy" value={sum.skipped} note="Similar angles skipped" />
             <Metric Icon={RotateCcw} title="Needs review" value={sum.hard} note="Again / hard" />
@@ -60,8 +61,9 @@ export default function ProgressTab({ onViewHistory }: { onViewHistory: () => vo
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3"><div className={`${card} p-5`}><p className={label}>Concepts secured</p><p className="mt-3 font-display text-[36px] tabular-nums">{conceptsMastered(questions, state.progress)} <span className="font-sans text-[12px] text-muted">/ {countConcepts(questions)}</span></p></div><div className={`${card} p-5`}><p className={label}>Questions today</p><p className="mt-3 font-display text-[36px] tabular-nums">{todayCount} <span className="font-sans text-[12px] text-muted">/ {settings.dailyGoal}</span></p></div><div className={`${card} col-span-2 p-5 sm:col-span-1`}><p className={label}>Review ready</p><p className="mt-3 font-display text-[36px] tabular-nums">{dueNow} <span className="font-sans text-[12px] text-muted">concepts</span></p></div></section>
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3"><div className={`${card} p-5`}><p className={label}>Confidence-secured concepts</p><p className="mt-3 font-display text-[36px] tabular-nums">{conceptsMastered(questions, state.progress)} <span className="font-sans text-[12px] text-muted">/ {countConcepts(questions)}</span></p></div><div className={`${card} p-5`}><p className={label}>Questions today</p><p className="mt-3 font-display text-[36px] tabular-nums">{todayCount} <span className="font-sans text-[12px] text-muted">/ {settings.dailyGoal}</span></p></div><div className={`${card} col-span-2 p-5 sm:col-span-1`}><p className={label}>Review ready</p><p className="mt-3 font-display text-[36px] tabular-nums">{dueNow} <span className="font-sans text-[12px] text-muted">concepts</span></p></div></section>
 
+      <AdaptivePanel/>
       <section className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
         <div className={`${card} p-5 sm:p-6`}>
           <div className="flex flex-wrap items-center justify-between gap-2"><div><p className={label}>Your rhythm</p><h2 className="mt-1 text-[18px] font-bold tracking-tight">Last 14 days</h2></div><span className="rounded-full bg-sunken px-2.5 py-1 font-mono text-[10px] text-muted">{attempts.length} tracked attempts</span></div>

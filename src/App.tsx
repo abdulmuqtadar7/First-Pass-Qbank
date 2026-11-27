@@ -10,6 +10,7 @@ import AvatarPicker from './components/AvatarPicker'
 import { readAvatar, type DoctorAvatar } from './components/DoctorWalk'
 import Player from './components/Player'
 import OwnerDashboard from './components/OwnerDashboard'
+import { adaptiveQueue, analyzeConcepts } from './lib/adaptive'
 import { buildBlock, shuffle } from './lib/blocks'
 import { buildSystemSession } from './lib/sessionBuilder'
 import { weakQuestions } from './lib/stats'
@@ -23,7 +24,7 @@ import type { OptionKey, Session, SessionMode, SessionSource } from './types/qba
 export default function App({ userId }: { userId: string }) {
   const { notifyChanged } = useCloudSync()
   const { questions, state, bankStatus } = useStore()
-  const { active, setActive, schedule } = useLearning()
+  const { active, setActive, schedule, attempts } = useLearning()
   const [path, setPath] = useState(window.location.pathname)
   const [tab, setTab] = useState<Tab>('study')
   const [session, setSession] = useState<Session | null>(() => active?.session ?? null)
@@ -47,7 +48,7 @@ export default function App({ userId }: { userId: string }) {
   const start = useCallback((ids: string[], title: string, mode: SessionMode = 'tutor', source?: SessionSource) => {
     if (!ids.length) return
     if (active && !window.confirm('Replace the saved unfinished session with a new one? Your recorded question progress will stay intact.')) return
-    const next: Session = { ids: shuffle(ids), title, mode, source }
+    const next: Session = { ids: source?.kind === 'adaptive' ? ids : shuffle(ids), title, mode, source }
     setSession(next)
     setActive({ session: next, queue: next.ids, position: 0, answers: {}, ratings: {}, times: {}, startedAt: Date.now(), updatedAt: Date.now() })
     setSKey((k) => k + 1)
@@ -71,12 +72,16 @@ export default function App({ userId }: { userId: string }) {
     } else if (session.source?.kind === 'block') {
       ids = buildBlock(questions, session.source.config, state).map((q) => q.id)
     }
+    if (session.source?.kind === 'adaptive') {
+      ids = adaptiveQueue(analyzeConcepts(questions, state.progress, schedule, attempts), state.progress, session.source.mode, session.source.size)
+      if (!ids.length) { window.alert('No matching adaptive concepts are available right now.'); return }
+    }
     if (!ids.length) ids = session.ids
-    const next: Session = { ...session, ids: shuffle(ids) }
+    const next: Session = { ...session, ids: session.source?.kind === 'adaptive' ? ids : shuffle(ids) }
     setSession(next)
     setActive(session.mode === 'review' ? null : { session: next, queue: next.ids, position: 0, answers: {}, ratings: {}, times: {}, startedAt: Date.now(), updatedAt: Date.now() })
     setSKey((k) => k + 1)
-  }, [questions, session, state, setActive])
+  }, [questions, session, state, schedule, attempts, setActive])
 
   const resume = useCallback(() => {
     if (!active) return

@@ -57,7 +57,10 @@ export type SessionMode = 'tutor' | 'exam' | 'review'
 export type FilterKey = 'all' | 'unanswered' | 'incorrect' | 'flagged'
 export type CoverageMode = 'core_concepts' | 'all'
 
+export type AdaptiveMode = 'daily' | 'review' | 'weak'
+
 export type SessionSource =
+  | { kind: 'adaptive'; mode: AdaptiveMode; size: number }
   | { kind: 'system'; system: string; coverageMode: CoverageMode }
   | { kind: 'block'; config: BlockConfig }
 
