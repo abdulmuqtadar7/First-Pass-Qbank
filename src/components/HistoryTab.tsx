@@ -9,7 +9,8 @@ export default function HistoryTab({ onReview }: { onReview: (ids: string[], ans
   const { history } = useLearning()
   const { byId } = useStore()
   const [query, setQuery] = useState('')
-  const filtered = useMemo(() => history.filter((h) => h.title.toLowerCase().includes(query.toLowerCase())), [history, query])
+  const [mode, setMode] = useState<'all' | 'mock'>('all')
+  const filtered = useMemo(() => history.filter((h) => (mode === 'all' || (h.mode === 'exam' && h.mock)) && h.title.toLowerCase().includes(query.toLowerCase())), [history, query, mode])
 
   function open(ids: string[], selections: Record<string, OptionKey | null>) {
     const prefill: Record<string, OptionKey> = {}
@@ -21,17 +22,18 @@ export default function HistoryTab({ onReview }: { onReview: (ids: string[], ans
     <div className="space-y-6">
       <header>
         <p className={label}>Your practice archive</p>
-        <h1 className="mt-2 font-display text-[39px] leading-tight tracking-[-.05em] sm:text-[50px]">Session history<span className="text-accent">.</span></h1>
-        <p className="mt-2 text-sm text-muted">Every completed block stays available for review. Only sessions completed after this update appear here.</p>
+        <h1 className="mt-2 font-display text-[28px] leading-tight tracking-[-.05em] sm:text-[36px]">Session history<span className="text-accent">.</span></h1>
+        <p className="mt-2 text-sm text-muted">Review completed practice sessions and mock examinations. Up to 120 sessions are retained.</p>
       </header>
       <div className={`${card} grid grid-cols-3 divide-x divide-line overflow-hidden`}>
         <Stat name="Completed blocks" value={history.length} />
         <Stat name="Questions reviewed" value={history.reduce((sum, h) => sum + h.answered, 0)} />
         <Stat name="Average score" value={`${history.length ? Math.round(history.reduce((sum, h) => sum + h.correct / Math.max(h.mode === 'exam' ? h.ids.length : h.answered, 1), 0) / history.length * 100) : 0}%`} />
       </div>
+      <div className="flex gap-2" role="group" aria-label="Session type">{(['all','mock'] as const).map(m=><button key={m} aria-pressed={mode===m} className={`${btnGhost} ${mode===m?'text-accent border-accent':''}`} onClick={()=>setMode(m)}>{m==='all'?'All sessions':'Mock exams'}</button>)}</div>
       <input aria-label="Find previous sessions" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search previous sessions..." className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm outline-none focus:border-accent" />
       <div className="space-y-3">
-        {!filtered.length && <div className={`${card} py-16 text-center`}><History size={32} className="mx-auto mb-3 text-accent/70"/><p className="font-semibold">No previous blocks yet</p><p className="mt-1 text-sm text-muted">Complete a session to create your first report.</p></div>}
+        {!filtered.length && <div className={`${card} py-16 text-center`}><History size={32} className="mx-auto mb-3 text-accent/70"/><p className="font-semibold">{mode === 'mock' ? 'No matching mock exams' : 'No matching sessions'}</p><p className="mt-1 text-sm text-muted">Complete a session to create your first report.</p></div>}
         {filtered.map((h) => {
           const denominator = h.mode === 'exam' ? h.ids.length : h.answered
           const score = denominator ? Math.round(h.correct / denominator * 100) : 0
@@ -44,7 +46,7 @@ export default function HistoryTab({ onReview }: { onReview: (ids: string[], ans
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
                     <span className="inline-flex items-center gap-1"><CalendarClock size={12}/>{new Date(h.completedAt).toLocaleDateString()}</span>
                     <span className="inline-flex items-center gap-1"><Clock3 size={12}/>{Math.floor(h.elapsed / 60)} min</span>
-                    <span>{h.mode === 'exam' ? 'Exam' : 'Tutor'} · {h.answered}/{h.ids.length} answered</span>
+                    <span>{h.mock ? 'Mock exam' : h.mode === 'exam' ? 'Exam' : 'Tutor'} · {h.answered}/{h.ids.length} answered</span>
                   </div>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Clock3, ClipboardCheck } from 'lucide-react'
+import { Clock3, ClipboardCheck } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { useLearning } from '../lib/learning'
 import { countConcepts } from '../lib/sessionBuilder'
@@ -7,8 +7,8 @@ import { MOCK_PRESETS, mockPool, mockQueue, BLOCK_SIZE } from '../lib/mockExam'
 import { btnGhost, btnPrimary, card, label } from '../lib/ui'
 import type { MockConfig, OptionKey } from '../types/qbank'
 
-interface Props { onStart: (ids: string[], config: MockConfig) => void; onResume: () => void; onReview: (ids: string[], prefill: Record<string, OptionKey>) => void; onBack: () => void }
-export default function ExamCenter({ onStart, onResume, onReview, onBack }: Props) {
+interface Props { onStart: (ids: string[], config: MockConfig) => void; onResume: () => void; onReview: (ids: string[], prefill: Record<string, OptionKey>) => void }
+export default function ExamCenter({ onStart, onResume, onReview }: Props) {
   const { questions, byId } = useStore()
   const { active, history } = useLearning()
   const systems = useMemo(() => [...new Map(questions.map(q => [q.system.trim().toLowerCase(), q.system])).entries()].sort((a,b) => a[1].localeCompare(b[1])), [questions])
@@ -25,8 +25,7 @@ export default function ExamCenter({ onStart, onResume, onReview, onBack }: Prop
   const mocks = history.filter(h => h.mode === 'exam' && h.mock)
   const score = (h: typeof mocks[number]) => Math.round(100 * h.correct / Math.max(1, h.ids.length))
   return <div className="space-y-6">
-    <button onClick={onBack} className={btnGhost}><ArrowLeft size={16}/> Practice</button>
-    <header><p className={label}>Timed assessment</p><h1 className="mt-2 font-display text-[39px] leading-tight tracking-[-.05em] sm:text-[50px]">Exam Center<span className="text-accent">.</span></h1><p className="mt-2 text-sm text-muted">Simulate exam day with timed blocks and review your performance afterward.</p></header>
+    <header><p className={label}>Timed assessment</p><h1 className="mt-2 font-display text-[28px] leading-tight tracking-[-.05em] sm:text-[36px]">Exam Center<span className="text-accent">.</span></h1><p className="mt-2 text-sm text-muted">Simulate exam day with timed blocks and review your performance afterward.</p></header>
     {active?.session.source?.kind === 'mock' && <section className={`${card} flex flex-wrap items-center justify-between gap-4 p-5`}><div><h2 className="font-bold">Unfinished mock examination</h2><p className="text-sm text-muted">{active.session.title} · Block {(active.mock?.block ?? 0) + 1} · {Object.values(active.answers).filter(a => a.selected).length}/{active.queue.length} answered</p></div><button className={btnPrimary} onClick={onResume}>Resume mock</button></section>}
     <section className={`${card} space-y-5 p-5 sm:p-7`}>
       <h2 className="text-lg font-bold">Choose your examination</h2>

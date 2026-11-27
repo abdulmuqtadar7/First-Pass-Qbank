@@ -44,11 +44,11 @@ export default function FlashcardPanel() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([['Due now',due.length],['New',filtered.filter(c => cardStatus(c)==='New').length],['Learning',filtered.filter(c => cardStatus(c)==='Learning').length],['Mastered',filtered.filter(c => cardStatus(c)==='Mastered').length]] as const).map(([name,n]) => <div key={name} className="rounded-xl border border-line bg-sunken/40 p-3"><p className={label}>{name}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{n}</p></div>)}</div>
       <div className="flex flex-wrap items-center justify-between gap-2"><NoteSyncStatus/><button disabled={!flashcards.length} onClick={exportCards} className={btnGhost}>Export CSV</button></div>
     </section>
-    <section className={`${card} space-y-3 p-4 sm:p-5`}>
-      <h3 className="font-semibold">Create cards from high-yield pearls</h3><p className="text-xs text-muted">One representative card per missing concept, using existing question content. Add up to {GENERATION_BATCH} at a time. No AI generation.</p>
+    <details className={`${card} p-4 sm:p-5`}>
+      <summary className="cursor-pointer font-semibold text-accent">Create cards from high-yield pearls</summary><div className="mt-3 space-y-3"><p className="text-xs text-muted">One representative card per missing concept, using existing question content. Add up to {GENERATION_BATCH} at a time. No AI generation.</p>
       <select aria-label="Generate cards for system" className={field} value={generateSystem} onChange={e => setGenerateSystem(e.target.value)}><option value="">All systems</option>{systems.map(s => <option key={s}>{s}</option>)}</select>
       <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-muted">{candidateCount} missing concepts</span><button className={btnGhost} disabled={!candidateCount} onClick={() => {generateFlashcards(questions,generateSystem);setDeck(generateSystem);setView('review');setRevealed('');setNow(Date.now())}}>Generate {Math.min(GENERATION_BATCH,candidateCount)} cards</button></div>
-    </section>
+    </div></details>
     <div className="flex gap-2 rounded-xl border border-line bg-sunken p-1.5">{(['review','library'] as const).map(v => <button key={v} aria-pressed={view===v} onClick={() => {setView(v);setRevealed('')}} className={`flex-1 rounded-lg p-2.5 text-sm font-semibold ${view===v?'bg-surface text-accent shadow-sm':'text-muted'}`}>{v==='review'?'Daily revision':'Card library'}</button>)}</div>
     {view==='review' ? current ? <section className={`${card} overflow-hidden`}>
       <div className="border-b border-line p-5 text-center"><p className={label}>{cardDeck(current,byId)} · {cardStatus(current)}</p><h3 className="mt-5 whitespace-pre-wrap break-words text-xl font-semibold">{current.front}</h3></div>

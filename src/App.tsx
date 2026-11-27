@@ -4,11 +4,12 @@ import AppNav, { type Tab } from './components/AppNav'
 import StudyTab from './components/StudyTab'
 import ExamCenter from './components/ExamCenter'
 import { mockQueue } from './lib/mockExam'
-import { btnGhost } from './lib/ui'
+import { BookOpen, GraduationCap, History, Layers, NotebookPen, RotateCcw } from 'lucide-react'
 import ReviewTab from './components/ReviewTab'
-import ProgressTab from './components/ProgressTab'
+import ProgressTab, { WorkspacePreferences } from './components/ProgressTab'
 import HistoryTab from './components/HistoryTab'
 import NotebookTab from './components/NotebookTab'
+import FlashcardPanel from './components/FlashcardPanel'
 import AvatarPicker from './components/AvatarPicker'
 import { readAvatar, type DoctorAvatar } from './components/DoctorWalk'
 import Player from './components/Player'
@@ -102,6 +103,8 @@ export default function App({ userId }: { userId: string }) {
     setSKey((k) => k + 1)
   }, [active, questions])
 
+  useEffect(() => { window.scrollTo(0, 0) }, [tab])
+
   const due = useMemo(
     () => new Set([
       ...weakQuestions(questions, state.progress, state.flagged).map((q) => q.id),
@@ -109,6 +112,8 @@ export default function App({ userId }: { userId: string }) {
     ]).size,
     [questions, schedule, state.progress, state.flagged],
   )
+
+  const group = tab === 'practice' || tab === 'exams' ? 'study' : tab === 'notebook' || tab === 'flashcards' || tab === 'review' ? 'library' : tab === 'progress' || tab === 'history' ? 'progress' : null
 
   if (path.startsWith('/admin')) return <OwnerDashboard />
 
@@ -137,20 +142,25 @@ export default function App({ userId }: { userId: string }) {
       <AppNav tab={tab} onChange={setTab} reviewCount={due} avatar={avatar} onPickAvatar={() => setAvatarPickerOpen(true)} />
       <AnimatePresence mode="wait" initial={false}>
         <motion.main
-          key={tab}
+          key={group ?? tab}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.16, ease: 'easeOut' }}
           className="mx-auto w-full max-w-[1650px] px-3 pb-32 pt-3 sm:px-7 sm:pt-5 md:pb-24 lg:px-10"
         >
-          {tab === 'study' && <StudyTab onStart={start} onResume={resume} hasSavedSession={!!active} avatar={avatar ?? 'male'} />}
-          {tab === 'practice' && <div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/20 bg-surface p-4"><div><p className="text-sm font-bold">Ready for exam day?</p><p className="text-xs text-muted">Timed mock examinations and reports</p></div><button className={btnGhost} onClick={() => setTab('exams')}>Exam Center</button></div><StudyTab variant="practice" onStart={start} onResume={resume} hasSavedSession={!!active} avatar={avatar ?? 'male'} /></div>}
-          {tab === 'exams' && <ExamCenter onStart={(ids, config) => start(ids, config.name, 'exam', { kind: 'mock', config })} onResume={resume} onReview={review} onBack={() => setTab('practice')} />}
+          {group && <nav aria-label={`${group === 'study' ? 'Study' : group === 'library' ? 'Library' : 'Progress'} sections`} className="mb-5 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1.5 sm:mb-6 sm:w-fit">
+            {(group === 'study' ? [{id:'practice',name:'Question Bank',Icon:BookOpen},{id:'exams',name:'Exam Center',Icon:GraduationCap}] : group === 'library' ? [{id:'notebook',name:'Notes',Icon:NotebookPen},{id:'flashcards',name:'Flashcards',Icon:Layers},{id:'review',name:'Question Review',Icon:RotateCcw}] : [{id:'progress',name:'Overview',Icon:BookOpen},{id:'history',name:'History',Icon:History}]).map(({id,name,Icon}) => <button key={id} type="button" aria-current={tab===id?'page':undefined} onClick={()=>setTab(id as Tab)} className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold sm:flex-none ${tab===id?'bg-accent/10 text-accent':'text-muted hover:bg-sunken'}`}><Icon size={15} className="shrink-0"/>{name}</button>)}
+          </nav>}
+          {tab === 'study' && <StudyTab onStart={start} onResume={resume} avatar={avatar ?? 'male'} onBrowse={()=>setTab('practice')} onFlashcards={()=>setTab('flashcards')} />}
+          {tab === 'practice' && <StudyTab variant="practice" onStart={start} onResume={resume} avatar={avatar ?? 'male'} />}
+          {tab === 'exams' && <ExamCenter onStart={(ids, config) => start(ids, config.name, 'exam', { kind: 'mock', config })} onResume={resume} onReview={review} />}
           {tab === 'review' && <ReviewTab onStart={start} />}
-          {tab === 'progress' && <ProgressTab onViewHistory={() => setTab('history')} />}
+          {tab === 'progress' && <ProgressTab />}
           {tab === 'history' && <HistoryTab onReview={review} />}
           {tab === 'notebook' && <NotebookTab />}
+          {tab === 'flashcards' && <FlashcardPanel />}
+          {tab === 'settings' && <WorkspacePreferences />}
         </motion.main>
       </AnimatePresence>
       <AvatarPicker open={avatarPickerOpen} selected={avatar} onChoose={chooseAvatar} onClose={() => setAvatarPickerOpen(false)} />

@@ -34,11 +34,12 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
 
   const missed = weak.filter((q) => progress[q.id]?.lastCorrect === false).length
   const hard = weak.filter((q) => progress[q.id]?.status === 'hard').length
-  const flaggedCount = weak.filter((q) => flagged.includes(q.id)).length
+  const bookmarks = questions.filter(q => flagged.includes(q.id))
+  const flaggedCount = bookmarks.length
 
   return (
     <div className="space-y-9">
-      <header><p className={`${label} flex items-center gap-2`}><RotateCcw size={13} className="text-accent" /> Active recall / Review</p><h1 className="mt-2 font-display text-[38px] leading-tight tracking-[-.055em] sm:text-[49px]">Strengthen your weak spots<span className="text-accent">.</span></h1><p className="mt-1 text-[13px] text-muted">Turn missed questions into permanent knowledge.</p></header>
+      <header><p className={`${label} flex items-center gap-2`}><RotateCcw size={13} className="text-accent" /> Active recall / Review</p><h1 className="mt-2 font-display text-[28px] leading-tight tracking-[-.05em] sm:text-[36px]">Strengthen your weak spots<span className="text-accent">.</span></h1><p className="mt-1 text-[13px] text-muted">Turn missed questions into permanent knowledge.</p></header>
 
       <section className={`${card} overflow-hidden`}>
         <div className="grid grid-cols-3 divide-x divide-line">
@@ -46,7 +47,7 @@ export default function ReviewTab({ onStart }: { onStart: (ids: string[], title:
         </div>
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-sunken/50 px-5 py-5 sm:px-6">
           <div><p className="text-[13px] font-semibold">Your personalized review queue</p><p className="mt-1 text-[11px] text-muted">Missed, flagged and hard concepts are grouped here automatically.</p></div>
-          <button disabled={!weak.length} onClick={() => onStart(weak.map((q) => q.id), 'Weak drill', 'tutor')} className={btnPrimary}>Review {weak.length} questions <ArrowRight size={15} /></button>
+          <div className="flex flex-wrap gap-2"><button disabled={!weak.length} onClick={() => onStart(weak.map((q) => q.id), 'Weak drill', 'tutor')} className={btnPrimary}>Review {weak.length} questions <ArrowRight size={15} /></button><button disabled={!bookmarks.length} onClick={() => onStart(bookmarks.map(q => q.id), 'Bookmarked questions', 'tutor')} className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-xs font-semibold disabled:opacity-50"><Flag size={14}/> Review bookmarks ({bookmarks.length})</button></div>
         </div>
       </section>
 

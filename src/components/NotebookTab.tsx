@@ -1,4 +1,4 @@
-import { BrainCircuit, Download, NotebookPen, Pin, Trash2, Pencil } from 'lucide-react'
+import { Download, NotebookPen, Pin, Trash2, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useLearning } from '../lib/learning'
 import { listNotes, notesAsText } from '../lib/notebook'
@@ -8,13 +8,11 @@ import type { Question } from '../types/qbank'
 import type { StudyNote } from '../lib/learning'
 import { useStore } from '../lib/store'
 import { btnGhost, btnPrimary, card, label } from '../lib/ui'
-import FlashcardPanel from './FlashcardPanel'
 import StudyCardReader from './StudyCardReader'
 
 export default function NotebookTab() {
   const { notes, saveNote, deleteNote, toggleNotePin } = useLearning()
   const { byId } = useStore()
-  const [tab, setTab] = useState<'notes' | 'cards'>('notes')
   const [query, setQuery] = useState('')
   const [system, setSystem] = useState('')
   const [pinnedOnly, setPinnedOnly] = useState(false)
@@ -29,21 +27,16 @@ export default function NotebookTab() {
   }
 
   return <div className="space-y-6">
-    <header><p className={label}>Make knowledge stick</p><h1 className="mt-2 font-display text-[39px] leading-tight tracking-[-.05em] sm:text-[50px]">Your notebook<span className="text-accent">.</span></h1><p className="mt-2 text-sm text-muted">Save concise notes and convert explanations into review cards as you study.</p></header>
-    <div className="flex gap-2 rounded-xl border border-line bg-sunken p-1.5">
-      {([['notes','Notes',NotebookPen],['cards','Flashcards',BrainCircuit]] as const).map(([id, name, Icon]) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold ${tab === id ? 'bg-surface text-accent shadow-sm' : 'text-muted'}`}><Icon size={15}/>{name}</button>)}
-    </div>
-    {tab === 'notes' ? <>
+    <header><p className={label}>Make knowledge stick</p><h1 className="mt-2 font-display text-[28px] leading-tight tracking-[-.05em] sm:text-[34px]">Your notebook<span className="text-accent">.</span></h1><p className="mt-2 text-sm text-muted">Save concise notes and convert explanations into review cards as you study.</p></header>
       <section className={`${card} space-y-3 p-4 sm:p-5`}>
         <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-semibold">{allNotes.length} saved notes · {allNotes.filter(([, n]) => n.pinned).length} pinned</p><button type="button" onClick={exportNotes} disabled={!allNotes.length} className={btnGhost}><Download size={14}/> Export all notes</button></div>
         <input aria-label="Search your notes" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search notes, systems or concepts..." className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm outline-none focus:border-accent" />
-        <div className="flex flex-wrap items-center gap-3"><select aria-label="Filter by system" value={system} onChange={e => setSystem(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 py-2.5 text-sm"><option value="">All systems</option>{systems.map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" aria-pressed={pinnedOnly} onClick={() => setPinnedOnly(v => !v)} className={`${btnGhost} ${pinnedOnly ? 'border-accent text-accent' : ''}`}><Pin size={14}/> Pinned only</button></div>
+        <details className="rounded-xl border border-line p-3"><summary className="cursor-pointer text-xs font-semibold text-accent">Filters{system || pinnedOnly ? ' · active' : ''}</summary><div className="mt-3"><div className="flex flex-wrap items-center gap-3"><select aria-label="Filter by system" value={system} onChange={e => setSystem(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 py-2.5 text-sm"><option value="">All systems</option>{systems.map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" aria-pressed={pinnedOnly} onClick={() => setPinnedOnly(v => !v)} className={`${btnGhost} ${pinnedOnly ? 'border-accent text-accent' : ''}`}><Pin size={14}/> Pinned only</button></div></div></details>
         <div className="flex flex-wrap items-center justify-between gap-2"><NoteSyncStatus /><button type="button" className={btnPrimary} disabled={!matchingNotes.length} onClick={()=>setReader(matchingNotes[0]?.[0] ?? null)}>Read notes as cards</button></div>
       </section>
       {!matchingNotes.length && <div className={`${card} py-14 text-center`}><NotebookPen size={28} className="mx-auto mb-3 text-accent/70"/><p className="font-semibold">{allNotes.length ? 'No matching notes' : 'No notes yet'}</p><p className="mt-1 text-sm text-muted">{allNotes.length ? 'Try another search or reset your filters.' : 'Save a personal note while studying any question.'}</p>{allNotes.length > 0 && <button className={`${btnGhost} mt-4`} onClick={() => { setQuery(''); setSystem(''); setPinnedOnly(false) }}>Clear filters</button>}</div>}
       {matchingNotes.map(([id, note]) => <NotebookEntry key={id} id={id} note={note} q={byId.get(id)} onSave={saveNote} onDelete={deleteNote} onPin={toggleNotePin} onOpen={setReader} />)}
       {reader !== null && <StudyCardReader mode="note" initialId={reader} cards={matchingNotes.map(([id,n])=>({id,category:byId.get(id)?.system ?? 'Personal',title:byId.get(id)?.concept_name ?? id,text:n.text}))} onClose={()=>setReader(null)}/>}
-    </> : <FlashcardPanel />}
   </div>
 }
 
