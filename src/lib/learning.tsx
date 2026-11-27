@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { conceptKey, selectSessionQuestions } from './sessionBuilder'
 import type { Answer, Confidence, OptionKey, Progress, Question, Session, SessionMode } from '../types/qbank'
+import { cardTextValid, GENERATION_BATCH, pearlCandidates, reviewedCard, type FlashcardRating } from './flashcards'
 import { fieldKey, LEGACY_KEYS } from './accountStorage'
 
 export const LEARNING_KEY = 'fp:learning:v1'
@@ -54,6 +55,9 @@ export interface Flashcard {
   dueAt: number
   intervalDays: number
   reviews: number
+  deck?: string
+  recallStreak?: number
+  lastReviewed?: number
 }
 
 export interface LearningSettings {
@@ -104,7 +108,11 @@ interface LearningContextValue extends LearningState {
   deleteNote: (id: string) => void
   toggleNotePin: (id: string) => void
   addFlashcard: (question: Question) => void
-  gradeFlashcard: (id: string, rating: Confidence) => void
+  gradeFlashcard: (id: string, rating: FlashcardRating) => void
+  generateFlashcards: (questions: readonly Question[], system: string) => void
+  createFlashcard: (front: string, back: string, deck: string) => void
+  editFlashcard: (id: string, front: string, back: string, deck: string) => void
+  deleteFlashcard: (id: string) => void
   setSettings: (settings: Partial<LearningSettings>) => void
   clearLearningProgress: () => void
 }
@@ -197,14 +205,36 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
     })
   }, [])
 
-  const gradeFlashcard = useCallback((id: string, rating: Confidence) => {
-    setData((s) => ({ ...s, flashcards: s.flashcards.map((c) => {
-      if (c.id !== id) return c
-      const intervalDays = rating === 'hard' ? 1 : rating === 'good'
-        ? Math.max(3, Math.round(c.intervalDays * 2))
-        : Math.max(7, Math.round(c.intervalDays * 2.5))
-      return { ...c, intervalDays, reviews: c.reviews + 1, dueAt: Date.now() + intervalDays * DAY }
-    }) }))
+  const generateFlashcards = useCallback((questions: readonly Question[], system: string) => {
+    const now = Date.now()
+    setData(s => {
+      const candidates = pearlCandidates(questions, s.flashcards, system).slice(0, GENERATION_BATCH)
+      if (!candidates.length) return s
+      return { ...s, flashcards: [...s.flashcards, ...candidates.map(q => ({
+        id: crypto.randomUUID(), questionId: q.id, front: q.concept_name,
+        back: q.high_yield_pearl, dueAt: now, intervalDays: 0, reviews: 0,
+      }))] }
+    })
+  }, [])
+
+  const createFlashcard = useCallback((front: string, back: string, deck: string) => {
+    if (!cardTextValid(front, back, deck)) return
+    const next: Flashcard = { id: crypto.randomUUID(), questionId: '', front: front.trim(), back: back.trim(), deck: deck.trim(), dueAt: Date.now(), intervalDays: 0, reviews: 0 }
+    setData(s => ({ ...s, flashcards: [...s.flashcards, next] }))
+  }, [])
+
+  const editFlashcard = useCallback((id: string, front: string, back: string, deck: string) => {
+    if (!cardTextValid(front, back, deck)) return
+    setData(s => ({ ...s, flashcards: s.flashcards.map(c => c.id === id ? { ...c, front: front.trim(), back: back.trim(), deck: deck.trim() } : c) }))
+  }, [])
+
+  const deleteFlashcard = useCallback((id: string) => {
+    setData(s => ({ ...s, flashcards: s.flashcards.filter(c => c.id !== id) }))
+  }, [])
+
+  const gradeFlashcard = useCallback((id: string, rating: FlashcardRating) => {
+    const now = Date.now()
+    setData(s => ({ ...s, flashcards: s.flashcards.map(c => c.id === id ? reviewedCard(c, rating, now) : c) }))
   }, [])
 
   const setSettings = useCallback((settings: Partial<LearningSettings>) => {
@@ -216,8 +246,8 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
   }, [])
 
   const value = useMemo(() => ({ ...data, setActive, recordAttempt, rateConcept,
-    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress }),
-  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, setSettings, clearLearningProgress])
+    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, setSettings, clearLearningProgress }),
+  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, setSettings, clearLearningProgress])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
