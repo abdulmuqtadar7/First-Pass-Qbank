@@ -12,6 +12,7 @@ import { loadBundledQuestions, makeId, toQuestions, validateQuestions } from './
 import { dateKey } from './stats'
 import { conceptKey } from './sessionBuilder'
 import { fieldKey } from './accountStorage'
+import { EMPTY_BANK, mergeShared, readGlobalBank, type GlobalBank } from './globalBank'
 
 export const DAILY_GOAL = 20
 
@@ -53,6 +54,8 @@ function loadDaily(userId: string): Record<string, number> {
 interface Store {
   bankStatus: 'loading' | 'ready' | 'error'
   questions: Question[]
+  sharedQuestions: Question[]
+  globalBank: GlobalBank
   byId: Map<string, Question>
   state: PersistedState
   imported: RawQuestion[]
@@ -76,13 +79,15 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
   const [imported, setImported] = useState<RawQuestion[]>(() => loadImported(userId))
   const [daily, setDaily] = useState<Record<string, number>>(() => loadDaily(userId))
   const [baseQuestions, setBaseQuestions] = useState<RawQuestion[]>([])
+  const [globalBank, setGlobalBank] = useState<GlobalBank>(EMPTY_BANK)
   const [bankStatus, setBankStatus] = useState<Store['bankStatus']>('loading')
 
   useEffect(() => {
     let current = true
-    loadBundledQuestions().then((loaded) => {
+    Promise.all([loadBundledQuestions(), readGlobalBank()]).then(([loaded, shared]) => {
       if (current) {
         setBaseQuestions(loaded)
+        setGlobalBank(shared)
         setBankStatus('ready')
       }
     }).catch((error: unknown) => {
@@ -92,11 +97,12 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
     return () => { current = false }
   }, [])
 
+  const sharedQuestions = useMemo(() => mergeShared(baseQuestions, globalBank.entries), [baseQuestions, globalBank])
   const questions = useMemo(() => {
-    const map = new Map<string, Question>()
-    for (const q of toQuestions([...baseQuestions, ...imported])) if (!map.has(q.id)) map.set(q.id, q)
+    const map = new Map(sharedQuestions.map(q => [q.id, q]))
+    for (const q of toQuestions(imported)) if (!map.has(q.id)) map.set(q.id, q)
     return [...map.values()]
-  }, [baseQuestions, imported])
+  }, [sharedQuestions, imported])
 
   const byId = useMemo(() => new Map(questions.map((q) => [q.id, q])), [questions])
 
@@ -200,6 +206,8 @@ export function StoreProvider({ children, userId }: { children: ReactNode; userI
   const value: Store = {
     bankStatus,
     questions,
+    sharedQuestions,
+    globalBank,
     byId,
     state,
     imported,
