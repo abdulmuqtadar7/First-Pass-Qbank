@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import './desktopWorkspace.css'
+import { readDesktopDensity, readDesktopSidebar, writeDesktopPreference, type DesktopDensity } from './lib/desktopPreferences'
 import { AnimatePresence, motion } from 'motion/react'
 import AppNav, { type Tab } from './components/AppNav'
 import StudyTab from './components/StudyTab'
@@ -31,6 +33,10 @@ export default function App({ userId }: { userId: string }) {
   const { active, setActive, schedule, attempts } = useLearning()
   const [path, setPath] = useState(window.location.pathname)
   const [tab, setTab] = useState<Tab>('study')
+  const [density, setDensity] = useState<DesktopDensity>(() => readDesktopDensity(userId))
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readDesktopSidebar(userId))
+  const changeDensity = (value: DesktopDensity) => { setDensity(value); writeDesktopPreference(userId, 'density', value) }
+  const toggleSidebar = () => { const value = !sidebarCollapsed; setSidebarCollapsed(value); writeDesktopPreference(userId, 'sidebar', value ? 'collapsed' : 'expanded') }
   // Open the dashboard first, so students can explicitly resume or choose a new block.
   const [session, setSession] = useState<Session | null>(null)
   const [sKey, setSKey] = useState(0)
@@ -134,12 +140,12 @@ export default function App({ userId }: { userId: string }) {
   )
 
   if (session) {
-    return <Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} />
+    return <div className="fp-desktop-player" data-density={density}><Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} /></div>
   }
 
   return (
-    <div className={`${page} study-shell journey-app`}>
-      <AppNav tab={tab} onChange={setTab} reviewCount={due} avatar={avatar} onPickAvatar={() => setAvatarPickerOpen(true)} />
+    <div className={`${page} study-shell journey-app fp-workspace`} data-density={density} data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}>
+      <AppNav tab={tab} onChange={setTab} reviewCount={due} avatar={avatar} onPickAvatar={() => setAvatarPickerOpen(true)} density={density} onDensity={changeDensity} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
       <AnimatePresence mode="wait" initial={false}>
         <motion.main
           key={group ?? tab}
@@ -147,9 +153,9 @@ export default function App({ userId }: { userId: string }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.16, ease: 'easeOut' }}
-          className="mx-auto w-full max-w-[1650px] px-3 pb-32 pt-3 sm:px-7 sm:pt-5 md:pb-24 lg:px-10"
+          className="fp-main mx-auto w-full max-w-[1650px] px-3 pb-32 pt-3 sm:px-7 sm:pt-5 md:pb-24 lg:px-10"
         >
-          {group && <nav aria-label={`${group === 'study' ? 'Study' : group === 'library' ? 'Library' : 'Progress'} sections`} className="mb-5 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1.5 sm:mb-6 sm:w-fit">
+          {group && <nav aria-label={`${group === 'study' ? 'Study' : group === 'library' ? 'Library' : 'Progress'} sections`} className="fp-section-nav mb-5 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1.5 sm:mb-6 sm:w-fit">
             {(group === 'study' ? [{id:'practice',name:'Question Bank',Icon:BookOpen},{id:'exams',name:'Exam Center',Icon:GraduationCap}] : group === 'library' ? [{id:'notebook',name:'Notes',Icon:NotebookPen},{id:'flashcards',name:'Flashcards',Icon:Layers},{id:'review',name:'Question Review',Icon:RotateCcw}] : [{id:'progress',name:'Overview',Icon:BookOpen},{id:'history',name:'History',Icon:History}]).map(({id,name,Icon}) => <button key={id} type="button" aria-current={tab===id?'page':undefined} onClick={()=>setTab(id as Tab)} className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold sm:flex-none ${tab===id?'bg-accent/10 text-accent':'text-muted hover:bg-sunken'}`}><Icon size={15} className="shrink-0"/>{name}</button>)}
           </nav>}
           {tab === 'study' && <StudyTab onStart={start} onResume={resume} avatar={avatar ?? 'male'} onBrowse={()=>setTab('practice')} onFlashcards={()=>setTab('flashcards')} onNotes={()=>setTab('notebook')} onExam={()=>setTab('exams')} />}

@@ -3,6 +3,7 @@ import { useStore } from '../lib/store'
 import { useLearning } from '../lib/learning'
 import { adaptiveQueue, analyzeConcepts, masteryCounts, studyPlan, type Mastery } from '../lib/adaptive'
 import { btnGhost, btnPrimary, card, label } from '../lib/ui'
+import { DoctorWalk, type DoctorAvatar } from './DoctorWalk'
 import type { AdaptiveMode, SessionMode, SessionSource } from '../types/qbank'
 
 const STATES: { key: Mastery; title: string; color: string }[] = [
@@ -12,7 +13,7 @@ const STATES: { key: Mastery; title: string; color: string }[] = [
   { key: 'untouched', title: 'Untouched', color: 'bg-muted/35' },
 ]
 
-export default function AdaptivePanel({ onStart, compact = false }: { compact?: boolean; onStart?: (ids: string[], title: string, mode?: SessionMode, source?: SessionSource) => void }) {
+export default function AdaptivePanel({ onStart, compact = false, avatar }: { avatar?: DoctorAvatar; compact?: boolean; onStart?: (ids: string[], title: string, mode?: SessionMode, source?: SessionSource) => void }) {
   const { questions, state, todayCount } = useStore()
   const { schedule, attempts, settings, setSettings } = useLearning()
   const [now, setNow] = useState(Date.now)
@@ -32,7 +33,7 @@ export default function AdaptivePanel({ onStart, compact = false }: { compact?: 
     const title = mode === 'daily' ? 'Daily adaptive practice' : mode === 'review' ? 'Smart spaced review' : 'Weak concept practice'
     if (ids.length) onStart?.(ids, title, 'tutor', { kind: 'adaptive', mode, size })
   }
-  if (compact && onStart) return <section className={`${card} space-y-3 p-4 sm:p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-lg font-bold">Your smart study plan</h2><p className="mt-1 text-xs text-muted">{counts.due} due concepts · {counts.weak} weak · {plan.blockSize} recommended questions</p></div><button className={btnPrimary} disabled={!plan.blockSize} onClick={()=>launch('daily',plan.blockSize)}>Start daily practice</button></div><details className="border-t border-line pt-3"><summary className="cursor-pointer text-xs font-semibold text-accent">More study options</summary><div className="mt-3 flex flex-wrap gap-2"><button className={btnGhost} disabled={!counts.due} onClick={()=>launch('review',40)}>Review due ({Math.min(40,counts.due)})</button><button className={btnGhost} disabled={!counts.weak} onClick={()=>launch('weak',40)}>Focus weak ({Math.min(40,counts.weak)})</button></div><p className="mt-2 text-xs text-muted">Change your daily target and exam date in Workspace preferences. Full concept details are in Progress.</p></details></section>
+  if (compact && onStart) return <section className={`${card} fp-home-adaptive space-y-3 p-4 sm:p-5`}>{avatar&&<DoctorWalk avatar={avatar} small className="fp-command-only fp-command-doctor"/>}<div className="flex flex-wrap items-center justify-between gap-2"><div><p className="fp-command-only fp-command-kicker">PERSONALIZED PRACTICE</p><h2 className="text-lg font-bold">Your smart study plan</h2><p className="mt-1 text-xs text-muted">{counts.due} due concepts<span className="fp-command-mobile-copy"> · {counts.weak} weak</span> · {plan.blockSize} recommended questions</p></div><button className={btnPrimary} disabled={!plan.blockSize} onClick={()=>launch('daily',plan.blockSize)}>Start daily practice</button></div><details className="border-t border-line pt-3"><summary className="cursor-pointer text-xs font-semibold text-accent">More study options</summary><div className="mt-3 flex flex-wrap gap-2"><button className={btnGhost} disabled={!counts.due} onClick={()=>launch('review',40)}>Review due ({Math.min(40,counts.due)})</button><button className={btnGhost} disabled={!counts.weak} onClick={()=>launch('weak',40)}>Focus weak ({Math.min(40,counts.weak)})</button></div><p className="mt-2 text-xs text-muted">Change your daily target and exam date in Workspace preferences. Full concept details are in Progress.</p></details></section>
   return <section className={`${card} space-y-5 p-5 sm:p-7`}>
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className={label}>Adaptive learning</p><h2 className="mt-1 font-display text-[27px] font-bold tracking-tight">{onStart ? 'Your smart study plan' : 'Concept mastery'}</h2><p className="mt-1 text-xs text-muted">Based on actual recall, not just questions marked Easy.</p></div><button className={btnGhost} onClick={() => setShowRules(v => !v)}>{showRules ? 'Hide criteria' : 'How it works'}</button></div>
     {showRules && <div className="rounded-xl border border-line bg-sunken p-4 text-xs leading-6 text-muted">Untouched: no recorded attempt. Weak: most recent answer incorrect or marked Again. Mastered: latest answer correct, at least 80% lifetime accuracy and correct latest answers on at least two distinct questions (single-question topics need correct attempts on two recorded dates). Other attempted concepts are Learning. Due dates are separate from mastery. These are study estimates, not a validated exam-readiness score.</div>}

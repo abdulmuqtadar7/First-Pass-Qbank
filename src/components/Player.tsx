@@ -397,7 +397,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         : 'border-line text-muted'
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-canvas text-ink">
+    <div className="fp-player-shell fixed inset-0 z-50 flex flex-col bg-canvas text-ink">
       <header className="relative z-10 border-b border-line bg-surface/95 pt-[env(safe-area-inset-top)] shadow-[0_12px_40px_-35px_rgba(0,0,0,.3)] backdrop-blur-xl">
         <div className="h-[2px] w-full bg-sunken">
           <motion.div className="h-full rounded-r-full bg-accent" animate={{ width: `${((pos + 1) / total) * 100}%` }} transition={{ type: 'spring', stiffness: 420, damping: 32, mass: 0.8 }} />
@@ -447,7 +447,7 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
             <RotateCcw size={13} /> <span className="hidden sm:inline">New Random Session</span><span className="sm:hidden">Restart</span>
           </button>
         </div>
-        <div ref={strip} aria-label="Question navigator" className="no-scrollbar mx-auto flex max-w-4xl gap-1.5 overflow-x-auto px-3 pb-3 sm:px-5">
+        <div ref={strip} aria-label="Question navigator" className="fp-player-navigator no-scrollbar mx-auto flex max-w-4xl gap-1.5 overflow-x-auto px-3 pb-3 sm:px-5">
           {queue.map((id, i) => {
             if (i < range.start || i >= range.end) return null
             const a = answers[id]
@@ -478,9 +478,9 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
         </div>
       </header>
 
-      <div ref={scroller} className="flex-1 overflow-y-auto overscroll-contain">
+      <div ref={scroller} className="fp-player-scroll flex-1 overflow-y-auto overscroll-contain">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={q.id} initial={{ opacity: 0, x: dir.current > 0 ? 22 : -22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir.current > 0 ? -14 : 14 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="mx-auto max-w-4xl space-y-5 px-4 py-6 pb-16 sm:px-5 sm:py-8">
+          <motion.div key={q.id} initial={{ opacity: 0, x: dir.current > 0 ? 22 : -22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir.current > 0 ? -14 : 14 }} transition={{ duration: 0.15, ease: 'easeOut' }} className="fp-player-content mx-auto max-w-4xl space-y-5 px-4 py-6 pb-16 sm:px-5 sm:py-8">
           <article className={`${card} overflow-hidden`}>
             <div className="flex items-center justify-between gap-3 border-b border-line bg-sunken/45 px-5 py-3 sm:px-7">
               <span className={`${label} flex items-center gap-2`}><span className="h-1.5 w-1.5 rounded-full bg-accent" /> Clinical question / First Aid 36e</span>
@@ -489,11 +489,11 @@ export default function Player({ session, onExit, onReview, onRestart }: Props) 
                 <span className={tag}>Tier {q.tier}</span>
               </span>
             </div>
-            <p className="max-w-[76ch] px-5 py-7 font-reading text-[17px] leading-[1.9] tracking-[-.005em] sm:px-7 sm:py-9 sm:text-[18px]">{q.stem}</p>
+            <p className="fp-player-stem max-w-[76ch] px-5 py-7 font-reading text-[17px] leading-[1.9] tracking-[-.005em] sm:px-7 sm:py-9 sm:text-[18px]">{q.stem}</p>
             <QuestionReport key={q.id} q={q} />
           </article>
 
-          <div className="space-y-2.5" role="group" aria-label="Answer options">
+          <div className="fp-player-options space-y-2.5" role="group" aria-label="Answer options">
             {keys.map((k) => {
               const isCorrect = k === q.correct_option
               const picked = ans.selected === k
