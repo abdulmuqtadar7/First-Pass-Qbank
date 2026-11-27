@@ -24,10 +24,18 @@ export function conceptIdPrefix(id: string): string {
 }
 
 /** System scoping prevents equally named concepts in different systems from merging. */
+// Reuse normalization for repeated analytics/coverage passes. Weak keys are
+// automatically released when the question bank is replaced. Field checks also
+// keep results correct if a caller edits an object in place.
+const conceptKeys = new WeakMap<Question, { system: string; name: Question['concept_name']; conceptId: string; id: string; key: string }>()
 export function conceptKey(q: Question): string {
+  const cached = conceptKeys.get(q)
+  if (cached && cached.system === q.system && cached.name === q.concept_name && cached.conceptId === q.concept_id && cached.id === q.id) return cached.key
   const name = typeof q.concept_name === 'string' ? q.concept_name.trim() : ''
   const identity = name ? `name:${normalize(name)}` : `id:${normalize(conceptIdPrefix(q.concept_id)) || q.id}`
-  return `${normalize(q.system)}\u0000${identity}`
+  const key = `${normalize(q.system)}\u0000${identity}`
+  conceptKeys.set(q, { system: q.system, name: q.concept_name, conceptId: q.concept_id, id: q.id, key })
+  return key
 }
 
 export function countConcepts(questions: readonly Question[]): number {

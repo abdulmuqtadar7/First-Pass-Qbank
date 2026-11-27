@@ -62,24 +62,16 @@ export function summarize(qs: Question[], progress: Record<string, Progress>): S
 }
 
 export function conceptsMastered(qs: Question[], progress: Record<string, Progress>): number {
-  const groups = new Map<string, Question[]>()
-  for (const q of qs) {
-    const k = conceptKey(q)
-    groups.set(k, [...(groups.get(k) ?? []), q])
-  }
-  let n = 0
-  groups.forEach((list) => {
-    const st = list.map((q) => progress[q.id]?.status)
-    // Coverage mode deliberately samples one angle per concept. A single
-    // confidently mastered representative secures that concept on the map.
-    if (st.some((s) => s === 'mastered')) n++
-  })
-  return n
+  // A concept is secured if any one representative is marked mastered.
+  const mastered = new Set<string>()
+  for (const q of qs) if (progress[q.id]?.status === 'mastered') mastered.add(conceptKey(q))
+  return mastered.size
 }
 
 export function weakQuestions(qs: Question[], progress: Record<string, Progress>, flagged: string[]): Question[] {
+  const flags = new Set(flagged)
   return qs.filter((q) => {
     const p = progress[q.id]
-    return flagged.includes(q.id) || p?.status === 'hard' || (!!p && p.lastCorrect === false && p.status !== 'mastered')
+    return flags.has(q.id) || p?.status === 'hard' || (!!p && p.lastCorrect === false && p.status !== 'mastered')
   })
 }

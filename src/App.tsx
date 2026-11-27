@@ -1,21 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import './desktopWorkspace.css'
 import { readDesktopDensity, readDesktopSidebar, writeDesktopPreference, type DesktopDensity } from './lib/desktopPreferences'
 import { AnimatePresence, motion } from 'motion/react'
 import AppNav, { type Tab } from './components/AppNav'
-import StudyTab from './components/StudyTab'
-import ExamCenter from './components/ExamCenter'
 import { mockQueue } from './lib/mockExam'
 import { BookOpen, GraduationCap, History, Layers, NotebookPen, RotateCcw } from 'lucide-react'
-import ReviewTab from './components/ReviewTab'
-import ProgressTab, { WorkspacePreferences } from './components/ProgressTab'
-import HistoryTab from './components/HistoryTab'
-import NotebookTab from './components/NotebookTab'
-import FlashcardPanel from './components/FlashcardPanel'
 import AvatarPicker from './components/AvatarPicker'
 import { readAvatar, type DoctorAvatar } from './components/DoctorWalk'
-import Player from './components/Player'
-import OwnerDashboard from './components/OwnerDashboard'
 import { adaptiveQueue, analyzeConcepts } from './lib/adaptive'
 import { buildBlock, shuffle } from './lib/blocks'
 import { buildSystemSession } from './lib/sessionBuilder'
@@ -26,6 +17,40 @@ import { page } from './lib/ui'
 import { fieldKey } from './lib/accountStorage'
 import { useCloudSync } from './lib/cloudSync'
 import type { OptionKey, Session, SessionMode, SessionSource } from './types/qbank'
+
+// Keep the initial bundle focused on authentication and the workspace shell.
+// The full question bank is still initialized by the existing StoreProvider.
+const loadStudyTab = () => import('./components/StudyTab')
+const StudyTab = lazy(loadStudyTab)
+const ExamCenter = lazy(() => import('./components/ExamCenter'))
+const ReviewTab = lazy(() => import('./components/ReviewTab'))
+const loadProgress = () => import('./components/ProgressTab')
+const ProgressTab = lazy(loadProgress)
+const WorkspacePreferences = lazy(() => loadProgress().then(module => ({ default: module.WorkspacePreferences })))
+const HistoryTab = lazy(() => import('./components/HistoryTab'))
+const NotebookTab = lazy(() => import('./components/NotebookTab'))
+const FlashcardPanel = lazy(() => import('./components/FlashcardPanel'))
+const Player = lazy(() => import('./components/Player'))
+const OwnerDashboard = lazy(() => import('./components/OwnerDashboard'))
+
+function ScreenLoading() {
+  return <div role="status" aria-live="polite" className="flex min-h-32 items-center justify-center gap-3 p-6 text-sm text-muted"><span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-accent/20 border-t-accent" /> Loading workspace…</div>
+}
+
+// A failed chunk request (e.g. during deployment or a connection drop) must
+// not strand the student on a blank screen. Reload uses existing saved state.
+class ScreenBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() {
+    if (this.state.failed) return <div role="alert" className="mx-auto max-w-md p-6 text-center text-ink"><p className="font-semibold">This screen could not be loaded.</p><p className="mt-2 text-sm text-muted">Reload to try again. Previously saved progress is not reset.</p><button className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white" onClick={() => window.location.reload()}>Reload FirstPass</button></div>
+    return this.props.children
+  }
+}
+
+function DeferredScreen({ children }: { children: ReactNode }) {
+  return <ScreenBoundary><Suspense fallback={<ScreenLoading />}>{children}</Suspense></ScreenBoundary>
+}
 
 export default function App({ userId }: { userId: string }) {
   const { notifyChanged } = useCloudSync()
@@ -109,6 +134,8 @@ export default function App({ userId }: { userId: string }) {
     setSKey((k) => k + 1)
   }, [active, questions])
 
+  useEffect(() => { if (!path.startsWith('/admin') && bankStatus === 'loading') void loadStudyTab().catch(() => {}) }, [path, bankStatus])
+
   useEffect(() => { window.scrollTo(0, 0) }, [tab])
 
   const due = useMemo(
@@ -121,7 +148,7 @@ export default function App({ userId }: { userId: string }) {
 
   const group = tab === 'practice' || tab === 'exams' ? 'study' : tab === 'notebook' || tab === 'flashcards' || tab === 'review' ? 'library' : tab === 'progress' || tab === 'history' ? 'progress' : null
 
-  if (path.startsWith('/admin')) return <OwnerDashboard />
+  if (path.startsWith('/admin')) return <DeferredScreen><OwnerDashboard /></DeferredScreen>
 
   // Never mount a restored player against an empty, still-loading question map.
   if (bankStatus !== 'ready') return (
@@ -140,7 +167,7 @@ export default function App({ userId }: { userId: string }) {
   )
 
   if (session) {
-    return <div className="fp-desktop-player" data-density={density}><Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} /></div>
+    return <div className="fp-desktop-player" data-density={density}><DeferredScreen key={sKey}><Player key={sKey} session={session} onExit={() => setSession(null)} onReview={review} onRestart={restart} /></DeferredScreen></div>
   }
 
   return (
@@ -158,6 +185,7 @@ export default function App({ userId }: { userId: string }) {
           {group && <nav aria-label={`${group === 'study' ? 'Study' : group === 'library' ? 'Library' : 'Progress'} sections`} className="fp-section-nav mb-5 flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1.5 sm:mb-6 sm:w-fit">
             {(group === 'study' ? [{id:'practice',name:'Question Bank',Icon:BookOpen},{id:'exams',name:'Exam Center',Icon:GraduationCap}] : group === 'library' ? [{id:'notebook',name:'Notes',Icon:NotebookPen},{id:'flashcards',name:'Flashcards',Icon:Layers},{id:'review',name:'Question Review',Icon:RotateCcw}] : [{id:'progress',name:'Overview',Icon:BookOpen},{id:'history',name:'History',Icon:History}]).map(({id,name,Icon}) => <button key={id} type="button" aria-current={tab===id?'page':undefined} onClick={()=>setTab(id as Tab)} className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold sm:flex-none ${tab===id?'bg-accent/10 text-accent':'text-muted hover:bg-sunken'}`}><Icon size={15} className="shrink-0"/>{name}</button>)}
           </nav>}
+          <DeferredScreen key={tab}>
           {tab === 'study' && <StudyTab onStart={start} onResume={resume} avatar={avatar ?? 'male'} onBrowse={()=>setTab('practice')} onFlashcards={()=>setTab('flashcards')} onNotes={()=>setTab('notebook')} onExam={()=>setTab('exams')} />}
           {tab === 'practice' && <StudyTab variant="practice" onStart={start} onResume={resume} avatar={avatar ?? 'male'} />}
           {tab === 'exams' && <ExamCenter onStart={(ids, config) => start(ids, config.name, 'exam', { kind: 'mock', config })} onResume={resume} onReview={review} />}
@@ -167,6 +195,7 @@ export default function App({ userId }: { userId: string }) {
           {tab === 'notebook' && <NotebookTab />}
           {tab === 'flashcards' && <FlashcardPanel />}
           {tab === 'settings' && <WorkspacePreferences />}
+          </DeferredScreen>
         </motion.main>
       </AnimatePresence>
       <AvatarPicker open={avatarPickerOpen} selected={avatar} onChoose={chooseAvatar} onClose={() => setAvatarPickerOpen(false)} />

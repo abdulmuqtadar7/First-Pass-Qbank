@@ -49,16 +49,33 @@ export default function StudyTab({ onStart, onResume, avatar, onBrowse, onFlashc
   const goal = Math.max(1, settings.dailyGoal)
   const goalPct = Math.min(100, Math.round((todayCount / goal) * 100))
 
-  const systems = useMemo(() => {
+  // Group once per bank update rather than scanning the entire bank for
+  // every system and recounting concepts on every progress update.
+  const systemGroups = useMemo(() => {
     const names = [...SYSTEMS]
-    for (const q of questions) if (!names.some((name) => name.toLowerCase() === q.system.toLowerCase())) names.push(q.system)
-    return names.map((name) => {
-      const qs = questions.filter((q) => q.system.toLowerCase() === name.toLowerCase())
-      const answered = qs.filter((q) => (progress[q.id]?.attempts ?? 0) > 0).length
-      const mostRecent = Math.max(0, ...qs.map((q) => progress[q.id]?.lastAt ?? 0))
-      return { name, qs, answered, concepts: countConcepts(qs), mostRecent, sum: summarize(qs, progress) }
-    }).sort((a, b) => Number(!!b.qs.length) - Number(!!a.qs.length))
-  }, [questions, progress])
+    const groups = new Map<string, typeof questions>()
+    const known = new Set(names.map(name => name.toLowerCase()))
+    for (const q of questions) {
+      const key = q.system.toLowerCase()
+      if (!known.has(key)) { known.add(key); names.push(q.system) }
+      const list = groups.get(key)
+      if (list) list.push(q)
+      else groups.set(key, [q])
+    }
+    return names.map(name => {
+      const qs = groups.get(name.toLowerCase()) ?? []
+      return { name, qs, concepts: countConcepts(qs) }
+    })
+  }, [questions])
+  const systems = useMemo(() => systemGroups.map(({ name, qs, concepts }) => {
+    let answered = 0, mostRecent = 0
+    for (const q of qs) {
+      const p = progress[q.id]
+      if ((p?.attempts ?? 0) > 0) answered++
+      mostRecent = Math.max(mostRecent, p?.lastAt ?? 0)
+    }
+    return { name, qs, answered, concepts, mostRecent, sum: summarize(qs, progress) }
+  }).sort((a, b) => Number(!!b.qs.length) - Number(!!a.qs.length)), [systemGroups, progress])
 
   const featured = useMemo(() => [...systems].filter((s) => s.qs.length).sort((a, b) => b.mostRecent - a.mostRecent)[0], [systems])
   const selected = systems.find((s) => s.name === launcher)
