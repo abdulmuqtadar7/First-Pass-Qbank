@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useSt
 import { conceptKey, selectSessionQuestions } from './sessionBuilder'
 import type { Answer, Confidence, OptionKey, Progress, Question, Session, SessionMode, MockConfig } from '../types/qbank'
 import { cardTextValid, GENERATION_BATCH, pearlCandidates, reviewedCard, type FlashcardRating } from './flashcards'
+import { recordPlannerActivity, type PlannerPreferences, type PlannerActivity } from './revisionPlanner'
 import type { MockState } from './mockExam'
 import { fieldKey, LEGACY_KEYS } from './accountStorage'
 
@@ -66,6 +67,8 @@ export interface Flashcard {
 export interface LearningSettings {
   dailyGoal: number
   examDate: string
+  planner?: PlannerPreferences
+  plannerActivity?: Record<string, PlannerActivity>
 }
 
 export interface LearningState {
@@ -116,6 +119,7 @@ interface LearningContextValue extends LearningState {
   createFlashcard: (front: string, back: string, deck: string) => void
   editFlashcard: (id: string, front: string, back: string, deck: string) => void
   deleteFlashcard: (id: string) => void
+  markNoteRead: (id: string) => void
   setSettings: (settings: Partial<LearningSettings>) => void
   clearLearningProgress: () => void
 }
@@ -237,20 +241,30 @@ export function LearningProvider({ children, userId }: { children: ReactNode; us
 
   const gradeFlashcard = useCallback((id: string, rating: FlashcardRating) => {
     const now = Date.now()
-    setData(s => ({ ...s, flashcards: s.flashcards.map(c => c.id === id ? reviewedCard(c, rating, now) : c) }))
+    setData(s => {
+      const old = s.flashcards.find(c=>c.id===id)
+      if(!old) return s
+      const next = reviewedCard(old,rating,now)
+      if(next===old) return s
+      return {...s, flashcards:s.flashcards.map(c=>c.id===id?next:c), settings:recordPlannerActivity(s.settings,'cards',id,now)}
+    })
   }, [])
+
+  const markNoteRead = useCallback((id: string) => {
+    setData(s=> { if(!s.notes[id]) return s; const settings=recordPlannerActivity(s.settings,'notes',id,Date.now()); return settings===s.settings?s:{...s,settings} })
+  },[])
 
   const setSettings = useCallback((settings: Partial<LearningSettings>) => {
     setData((s) => ({ ...s, settings: { ...s.settings, ...settings } }))
   }, [])
 
   const clearLearningProgress = useCallback(() => {
-    setData((s) => ({ ...s, schedule: {}, attempts: [], history: [], active: null, flashcards: [] }))
+    setData((s) => ({ ...s, schedule: {}, attempts: [], history: [], active: null, flashcards: [], settings: {...s.settings, plannerActivity: {}} }))
   }, [])
 
   const value = useMemo(() => ({ ...data, setActive, recordAttempt, rateConcept,
-    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, setSettings, clearLearningProgress }),
-  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, setSettings, clearLearningProgress])
+    recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress }),
+  [data, setActive, recordAttempt, rateConcept, recordHistory, saveNote, deleteNote, toggleNotePin, addFlashcard, gradeFlashcard, generateFlashcards, createFlashcard, editFlashcard, deleteFlashcard, markNoteRead, setSettings, clearLearningProgress])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

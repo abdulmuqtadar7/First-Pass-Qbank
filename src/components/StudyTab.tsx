@@ -14,6 +14,7 @@ import { btnGhost, btnPrimary, card, label } from '../lib/ui'
 import type { CoverageMode, SessionMode, SessionSource } from '../types/qbank'
 import BlockBuilder from './BlockBuilder'
 import AdaptivePanel from './AdaptivePanel'
+import RevisionPlanner from './RevisionPlanner'
 import CoverageSelector from './CoverageSelector'
 import { DoctorWalk, type DoctorAvatar } from './DoctorWalk'
 
@@ -23,10 +24,12 @@ interface Props {
   avatar: DoctorAvatar
   onBrowse?: () => void
   onFlashcards?: () => void
+  onNotes?: () => void
+  onExam?: () => void
   variant?: 'home' | 'practice'
 }
 
-export default function StudyTab({ onStart, onResume, avatar, onBrowse, onFlashcards, variant = 'home' }: Props) {
+export default function StudyTab({ onStart, onResume, avatar, onBrowse, onFlashcards, onNotes, onExam, variant = 'home' }: Props) {
   const { questions, state, todayCount } = useStore()
   const { schedule, settings, attempts, active, setActive, flashcards } = useLearning()
   const { status: syncStatus, retry } = useCloudSync()
@@ -128,6 +131,7 @@ export default function StudyTab({ onStart, onResume, avatar, onBrowse, onFlashc
         <div className="min-w-0 p-3 sm:p-5"><Layers3 size={17} className="text-accent"/><p className="mt-2 text-xl font-bold tabular-nums">{mastered}<span className="text-xs text-muted"> / {totalConcepts}</span></p><p className="text-[11px] text-muted">Mastered</p></div>
       </section>
       <AdaptivePanel onStart={onStart} compact />
+      <RevisionPlanner onStart={onStart} onFlashcards={onFlashcards} onNotes={onNotes} onExam={onExam} onBrowse={onBrowse}/>
       <button type="button" onClick={onFlashcards} className={`${card} flex w-full items-center gap-3 p-4 text-left hover:border-accent/50`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Layers3 size={20}/></span><span className="min-w-0 flex-1"><span className="block font-semibold">Review flashcards</span><span className="text-xs text-muted">{flashcards.filter(c => c.dueAt <= Date.now()).length} cards due · Active recall</span></span><ChevronRight size={18} className="text-muted"/></button>
       {systemDeck}
     </> : <>

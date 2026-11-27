@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { useLearning } from '../lib/learning'
+import { localKey } from '../lib/revisionPlanner'
 import { btnGhost, btnPrimary, label } from '../lib/ui'
 
 export interface ReadingCard {
@@ -12,6 +14,7 @@ export interface ReadingCard {
 export default function StudyCardReader({ cards, initialId, mode, onClose }: {
   cards: ReadingCard[]; initialId: string; mode: 'note' | 'flashcard'; onClose: () => void
 }) {
+  const {markNoteRead,settings}=useLearning()
   const [selected, setSelected] = useState(initialId)
   const [revealed, setRevealed] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
@@ -44,7 +47,7 @@ export default function StudyCardReader({ cards, initialId, mode, onClose }: {
         {current ? <article className="min-h-[230px] rounded-[22px] border border-line bg-sunken/40 p-5 sm:p-8">
           <p className={`${label} break-words`}>{current.category || 'Personal'}</p>
           <h2 className="mt-3 whitespace-pre-wrap break-words text-xl font-semibold leading-snug sm:text-2xl">{current.title}</h2>
-          {isFlashcard && !revealed ? <div className="mt-8 flex justify-center"><button type="button" className={btnPrimary} onClick={()=>setRevealed(true)}>Reveal answer</button></div> : <div className="mt-5 border-t border-line pt-5"><p className="whitespace-pre-wrap break-words text-[16px] leading-[1.85] sm:text-[18px]">{current.text}</p>{isFlashcard && <button type="button" className={`${btnGhost} mt-6`} onClick={()=>setRevealed(false)}>Hide answer</button>}</div>}
+          {isFlashcard && !revealed ? <div className="mt-8 flex justify-center"><button type="button" className={btnPrimary} onClick={()=>setRevealed(true)}>Reveal answer</button></div> : <div className="mt-5 border-t border-line pt-5"><p className="whitespace-pre-wrap break-words text-[16px] leading-[1.85] sm:text-[18px]">{current.text}</p>{isFlashcard && <button type="button" className={`${btnGhost} mt-6`} onClick={()=>setRevealed(false)}>Hide answer</button>}{!isFlashcard && <button type="button" className={`${btnGhost} mt-6`} disabled={settings.plannerActivity?.[localKey(new Date())]?.notes.includes(current.id)} onClick={()=>markNoteRead(current.id)}>{settings.plannerActivity?.[localKey(new Date())]?.notes.includes(current.id)?'Read today':'Mark read today'}</button>}</div>}
         </article> : <p className="p-6 text-center text-muted">There are no matching cards.</p>}
       </div>
       <footer className="shrink-0 space-y-3 border-t border-line p-4 sm:px-6"><div className="grid grid-cols-2 gap-3"><button type="button" className={btnGhost} disabled={!current || index===0} onClick={()=>move(-1)}><ChevronLeft size={17}/> Previous card</button><button type="button" className={btnPrimary} disabled={!current || index+1>=cards.length} onClick={()=>move(1)}>Next card <ChevronRight size={17}/></button></div><p className="text-center text-xs text-muted">{isFlashcard ? 'Read-only browsing · Review schedule is unchanged.' : 'Read-only browsing · Your saved notes are unchanged.'}</p></footer>
